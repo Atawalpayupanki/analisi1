@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Data files (opcional - descomenta si no quieres subir los datos)
+# data/
+# *.jsonl
+# *.csv
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Configuración local (si tienes configs personalizadas)
+config/local_*.json

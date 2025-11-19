@@ -1,0 +1,49 @@
+{
+    "feeds": [
+        {
+            "nombre": "El País",
+            "urls": [
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/internacional/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/politica/portada"
+            ]
+        },
+        {
+            "nombre": "El Mundo",
+            "urls": [
+                "https://e00-elmundo.uecdn.es/elmundo/rss/portada.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/internacional.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/economia.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/espana.xml"
+            ]
+        },
+        {
+            "nombre": "ABC",
+            "urls": [
+                "https://www.abc.es/rss/feeds/abc_ultima.xml",
+                "https://www.abc.es/rss/feeds/abc_internacional.xml",
+                "https://www.abc.es/rss/feeds/abc_economia.xml",
+                "https://www.abc.es/rss/feeds/abc_espana.xml"
+            ]
+        },
+        {
+            "nombre": "La Vanguardia",
+            "urls": [
+                "https://www.lavanguardia.com/rss/home.xml",
+                "https://www.lavanguardia.com/rss/internacional.xml",
+                "https://www.lavanguardia.com/rss/economia.xml",
+                "https://www.lavanguardia.com/rss/politica.xml"
+            ]
+        },
+        {
+            "nombre": "La Razón",
+            "urls": [
+                "https://www.larazon.es/rss/portada.xml",
+                "https://www.larazon.es/rss/internacional.xml",
+                "https://www.larazon.es/rss/economia.xml",
+                "https://www.larazon.es/rss/espana.xml"
+            ]
+        }
+    ]
+}
