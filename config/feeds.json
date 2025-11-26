@@ -6,7 +6,17 @@
                 "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada",
                 "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/internacional/portada",
                 "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada",
-                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/politica/portada"
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/politica/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/sociedad/portada",
+                "https://feeds.elpais.com/mrss-s/list/ep/site/elpais.com/section/opinion",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/espana/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/ciencia/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/tecnologia/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/cultura/portada",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/television/portada",
+                "https://feeds.elpais.com/mrss-s/list/ep/site/elpais.com/section/clima-y-medio-ambiente",
+                "https://feeds.elpais.com/mrss-s/list/ep/site/elpais.com/section/educacion",
+                "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/gente/portada"
             ]
         },
         {
@@ -15,7 +25,13 @@
                 "https://e00-elmundo.uecdn.es/elmundo/rss/portada.xml",
                 "https://e00-elmundo.uecdn.es/elmundo/rss/internacional.xml",
                 "https://e00-elmundo.uecdn.es/elmundo/rss/economia.xml",
-                "https://e00-elmundo.uecdn.es/elmundo/rss/espana.xml"
+                "https://e00-elmundo.uecdn.es/elmundo/rss/espana.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/ciencia.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/tecnologia.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/cultura.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/opinion.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/sociedad.xml",
+                "https://e00-elmundo.uecdn.es/elmundo/rss/salud.xml"
             ]
         },
         {
@@ -24,7 +40,12 @@
                 "https://www.abc.es/rss/feeds/abc_ultima.xml",
                 "https://www.abc.es/rss/feeds/abc_internacional.xml",
                 "https://www.abc.es/rss/feeds/abc_economia.xml",
-                "https://www.abc.es/rss/feeds/abc_espana.xml"
+                "https://www.abc.es/rss/feeds/abc_espana.xml",
+                "https://www.abc.es/rss/feeds/abc_sociedad.xml",
+                "https://www.abc.es/rss/feeds/abc_cultura.xml",
+                "https://www.abc.es/rss/feeds/abc_ciencia.xml",
+                "https://www.abc.es/rss/feeds/abc_tecnologia.xml",
+                "https://www.abc.es/rss/feeds/abc_opinion.xml"
             ]
         },
         {
@@ -33,7 +54,12 @@
                 "https://www.lavanguardia.com/rss/home.xml",
                 "https://www.lavanguardia.com/rss/internacional.xml",
                 "https://www.lavanguardia.com/rss/economia.xml",
-                "https://www.lavanguardia.com/rss/politica.xml"
+                "https://www.lavanguardia.com/rss/politica.xml",
+                "https://www.lavanguardia.com/rss/cultura.xml",
+                "https://www.lavanguardia.com/rss/tecnologia.xml",
+                "https://www.lavanguardia.com/rss/sociedad.xml",
+                "https://www.lavanguardia.com/rss/ciencia.xml",
+                "https://www.lavanguardia.com/rss/vida.xml"
             ]
         },
         {
@@ -42,7 +68,11 @@
                 "https://www.larazon.es/rss/portada.xml",
                 "https://www.larazon.es/rss/internacional.xml",
                 "https://www.larazon.es/rss/economia.xml",
-                "https://www.larazon.es/rss/espana.xml"
+                "https://www.larazon.es/rss/espana.xml",
+                "https://www.larazon.es/rss/cultura.xml",
+                "https://www.larazon.es/rss/sociedad.xml",
+                "https://www.larazon.es/rss/tecnologia.xml",
+                "https://www.larazon.es/rss/ciencia.xml"
             ]
         }
     ]

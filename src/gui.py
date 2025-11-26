@@ -3,13 +3,36 @@ GUI para RSS China News Filter usando tkinter.
 
 Interfaz gráfica moderna para ejecutar el programa y visualizar resultados.
 """
+import sys
+import subprocess
+try:
+    from importlib.metadata import distributions
+except ImportError:
+    # Fallback para Python < 3.8
+    from importlib_metadata import distributions
+
+# Verificar dependencias críticas antes de importar nada más
+required = {'trafilatura', 'beautifulsoup4', 'requests', 'tenacity'}
+installed = {dist.metadata['Name'].lower().replace('-', '_') for dist in distributions()}
+# Normalizar nombres (beautifulsoup4 puede aparecer como beautifulsoup4)
+installed.update({dist.metadata['Name'].lower() for dist in distributions()})
+missing = required - installed
+
+if missing:
+    import tkinter as tk
+    from tkinter import messagebox
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showerror("Error de Dependencias", 
+        f"Faltan librerías necesarias:\n{', '.join(missing)}\n\n"
+        "Por favor, ejecuta:\npip install -r requirements.txt")
+    sys.exit(1)
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import threading
 import logging
-import sys
 import os
-import subprocess
 import json
 from pathlib import Path
 from queue import Queue
@@ -23,6 +46,7 @@ from parser import parse_feed, NewsItem
 from filtro_china import load_keywords, filter_china_news
 from deduplicador import deduplicate
 from almacenamiento import save_results
+from article_processor import process_articles
 
 
 class TextHandler(logging.Handler):
@@ -51,6 +75,8 @@ class RSSChinaGUI:
             'bg': '#f0f4f8',
             'primary': '#2563eb',
             'primary_dark': '#1e40af',
+            'secondary': '#6366f1',
+            'secondary_dark': '#4f46e5',
             'success': '#10b981',
             'warning': '#f59e0b',
             'error': '#ef4444',
@@ -265,7 +291,7 @@ class RSSChinaGUI:
                                       padx=30, pady=12,
                                       cursor='hand2',
                                       activebackground='#059669')
-        self.start_button.pack(pady=5)
+        self.start_button.pack(pady=5, fill=tk.X)
         
         self.stop_button = tk.Button(control_inner, text="⬛ DETENER",
                                      command=self.stop_process,
@@ -277,7 +303,22 @@ class RSSChinaGUI:
                                      cursor='hand2',
                                      state=tk.DISABLED,
                                      activebackground='#dc2626')
-        self.stop_button.pack(pady=5)
+        self.stop_button.pack(pady=5, fill=tk.X)
+        
+        # Separador
+        ttk.Separator(control_inner, orient='horizontal').pack(fill='x', pady=10)
+        
+        # Botón de Extracción
+        self.extract_button = tk.Button(control_inner, text="📝 EXTRAER TEXTO",
+                                      command=self.start_extraction,
+                                      bg=self.colors['secondary'],
+                                      fg='white',
+                                      font=('Segoe UI', 11, 'bold'),
+                                      relief='flat',
+                                      padx=30, pady=10,
+                                      cursor='hand2',
+                                      activebackground=self.colors['secondary_dark'])
+        self.extract_button.pack(pady=5, fill=tk.X)
         
         self.status_label = tk.Label(control_inner, text="● Listo",
                                      font=('Segoe UI', 10, 'bold'),
@@ -316,27 +357,26 @@ class RSSChinaGUI:
             row = (i // 2) + 1
             col = (i % 2) * 2
             
-            tk.Label(stats_inner, text=label, bg=self.colors['card_bg'],
-                    fg=self.colors['text'], font=('Segoe UI', 9)).grid(
-                        row=row, column=col, sticky=tk.W, padx=(0, 5), pady=3)
+            # Para feeds fallidos, hacer el label clickeable
+            if key == "feeds_error":
+                label_widget = tk.Label(stats_inner, text=label, bg=self.colors['card_bg'],
+                                       fg=self.colors['text'], font=('Segoe UI', 9),
+                                       cursor='hand2')
+                label_widget.grid(row=row, column=col, sticky=tk.W, padx=(0, 5), pady=3)
+                label_widget.bind('<Button-1>', lambda e: self.show_failed_feeds())
+                
+                # Añadir efecto hover
+                label_widget.bind('<Enter>', lambda e: label_widget.config(fg=self.colors['error'], font=('Segoe UI', 9, 'bold')))
+                label_widget.bind('<Leave>', lambda e: label_widget.config(fg=self.colors['text'], font=('Segoe UI', 9)))
+            else:
+                tk.Label(stats_inner, text=label, bg=self.colors['card_bg'],
+                        fg=self.colors['text'], font=('Segoe UI', 9)).grid(
+                            row=row, column=col, sticky=tk.W, padx=(0, 5), pady=3)
             
             value_label = tk.Label(stats_inner, text="0", bg=self.colors['card_bg'],
                                   fg=color, font=('Segoe UI', 11, 'bold'))
             value_label.grid(row=row, column=col+1, sticky=tk.W, padx=(0, 5), pady=3)
             self.stats_labels[key] = value_label
-            
-            # Añadir botón de info para feeds fallidos
-            if key == "feeds_error":
-                info_button = tk.Button(stats_inner, text="ℹ️",
-                                       command=self.show_failed_feeds,
-                                       bg=self.colors['card_bg'],
-                                       fg=self.colors['error'],
-                                       font=('Segoe UI', 9),
-                                       relief='flat',
-                                       cursor='hand2',
-                                       padx=5, pady=0,
-                                       activebackground=self.colors['bg'])
-                info_button.grid(row=row, column=col+2, sticky=tk.W, padx=(0, 20), pady=3)
         
         # === NOTEBOOK PARA LOGS Y RESULTADOS ===
         notebook_frame = tk.Frame(main_frame, bg=self.colors['card_bg'],
@@ -384,6 +424,13 @@ class RSSChinaGUI:
         tk.Button(results_toolbar, text="📊 Abrir CSV",
                  command=self.open_csv,
                  bg=self.colors['text_light'], fg='white',
+                 font=('Segoe UI', 9),
+                 relief='flat', padx=15, pady=8,
+                 cursor='hand2').pack(side=tk.LEFT, padx=5)
+                 
+        tk.Button(results_toolbar, text="📂 Abrir Full JSONL",
+                 command=self.open_full_jsonl,
+                 bg=self.colors['secondary'], fg='white',
                  font=('Segoe UI', 9),
                  relief='flat', padx=15, pady=8,
                  cursor='hand2').pack(side=tk.LEFT, padx=5)
@@ -552,6 +599,8 @@ class RSSChinaGUI:
     
     def show_failed_feeds(self):
         """Muestra un diálogo con los feeds que fallaron."""
+        import webbrowser
+        
         if not self.failed_feeds:
             messagebox.showinfo(
                 "Feeds Fallidos",
@@ -565,25 +614,10 @@ class RSSChinaGUI:
             )
             return
         
-        # Crear mensaje detallado
-        message = f"Se encontraron {len(self.failed_feeds)} feed(s) fallido(s):\n\n"
-        
-        for i, (nombre, url, razon) in enumerate(self.failed_feeds, 1):
-            message += f"{i}. {nombre}\n"
-            message += f"   URL: {url}\n"
-            message += f"   Razón: {razon}\n\n"
-        
-        message += "\n💡 Posibles causas:\n"
-        message += "  • El servidor del medio está caído temporalmente\n"
-        message += "  • La URL del feed cambió o ya no existe\n"
-        message += "  • Problemas de conexión a Internet\n"
-        message += "  • El feed requiere autenticación\n"
-        message += "  • Timeout por servidor lento"
-        
         # Crear ventana personalizada
         dialog = tk.Toplevel(self.root)
         dialog.title("⚠️ Feeds Fallidos - Detalles")
-        dialog.geometry("700x500")
+        dialog.geometry("850x600")
         dialog.configure(bg=self.colors['bg'])
         
         # Frame principal
@@ -596,28 +630,109 @@ class RSSChinaGUI:
                         font=('Segoe UI', 14, 'bold'),
                         bg=self.colors['bg'],
                         fg=self.colors['error'])
-        title.pack(pady=(0, 15))
+        title.pack(pady=(0, 10))
         
-        # Área de texto con scroll
-        text_frame = tk.Frame(main, bg='white', relief='solid', borderwidth=1)
-        text_frame.pack(fill=tk.BOTH, expand=True)
+        # Subtítulo con instrucciones
+        subtitle = tk.Label(main,
+                           text="Haz clic en '🌐 Abrir URL' para verificar el feed en tu navegador",
+                           font=('Segoe UI', 9),
+                           bg=self.colors['bg'],
+                           fg=self.colors['text_light'])
+        subtitle.pack(pady=(0, 15))
         
-        scrollbar = tk.Scrollbar(text_frame)
+        # Frame con scroll para la lista de feeds
+        list_frame = tk.Frame(main, bg='white', relief='solid', borderwidth=1)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Canvas y scrollbar para scroll vertical
+        canvas = tk.Canvas(list_frame, bg='white', highlightthickness=0)
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='white')
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Crear una tarjeta para cada feed fallido
+        for i, (nombre, url, razon) in enumerate(self.failed_feeds, 1):
+            # Frame para cada feed
+            feed_card = tk.Frame(scrollable_frame, bg='white', 
+                                relief='solid', borderwidth=1,
+                                highlightbackground=self.colors['border'],
+                                highlightthickness=1)
+            feed_card.pack(fill=tk.X, padx=10, pady=8)
+            
+            # Contenido interno
+            feed_inner = tk.Frame(feed_card, bg='white', padx=15, pady=12)
+            feed_inner.pack(fill=tk.BOTH, expand=True)
+            
+            # Número y nombre del medio
+            header_frame = tk.Frame(feed_inner, bg='white')
+            header_frame.pack(fill=tk.X, pady=(0, 8))
+            
+            tk.Label(header_frame, 
+                    text=f"{i}.",
+                    font=('Segoe UI', 11, 'bold'),
+                    bg='white',
+                    fg=self.colors['error']).pack(side=tk.LEFT, padx=(0, 8))
+            
+            tk.Label(header_frame,
+                    text=nombre,
+                    font=('Segoe UI', 11, 'bold'),
+                    bg='white',
+                    fg=self.colors['text']).pack(side=tk.LEFT)
+            
+            # URL (truncada si es muy larga)
+            url_display = url if len(url) <= 80 else url[:77] + "..."
+            tk.Label(feed_inner,
+                    text=f"URL: {url_display}",
+                    font=('Consolas', 9),
+                    bg='white',
+                    fg=self.colors['text_light'],
+                    anchor='w').pack(fill=tk.X, pady=(0, 5))
+            
+            # Razón del fallo
+            tk.Label(feed_inner,
+                    text=f"Razón: {razon}",
+                    font=('Segoe UI', 9),
+                    bg='white',
+                    fg=self.colors['error'],
+                    anchor='w').pack(fill=tk.X, pady=(0, 10))
+            
+            # Botón para abrir URL
+            open_btn = tk.Button(feed_inner,
+                                text="🌐 Abrir URL en navegador",
+                                command=lambda u=url: webbrowser.open(u),
+                                bg=self.colors['primary'],
+                                fg='white',
+                                font=('Segoe UI', 9, 'bold'),
+                                relief='flat',
+                                cursor='hand2',
+                                padx=15, pady=6,
+                                activebackground=self.colors['primary_dark'])
+            open_btn.pack(anchor='w')
+        
+        # Empaquetar canvas y scrollbar
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        text_widget = tk.Text(text_frame,
-                             wrap=tk.WORD,
-                             font=('Segoe UI', 10),
-                             bg='white',
-                             fg=self.colors['text'],
-                             yscrollcommand=scrollbar.set,
-                             padx=15, pady=15)
-        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=text_widget.yview)
+        # Información adicional
+        info_frame = tk.Frame(main, bg=self.colors['bg'])
+        info_frame.pack(fill=tk.X, pady=(15, 0))
         
-        # Insertar contenido
-        text_widget.insert('1.0', message)
-        text_widget.config(state=tk.DISABLED)
+        info_text = ("💡 Posibles causas: Servidor caído temporalmente • URL cambió o no existe • "
+                    "Problemas de conexión • Feed requiere autenticación • Timeout")
+        tk.Label(info_frame,
+                text=info_text,
+                font=('Segoe UI', 8),
+                bg=self.colors['bg'],
+                fg=self.colors['text_light'],
+                wraplength=800,
+                justify=tk.LEFT).pack(side=tk.LEFT)
         
         # Botón cerrar
         close_btn = tk.Button(main, text="Cerrar",
@@ -627,7 +742,8 @@ class RSSChinaGUI:
                              font=('Segoe UI', 10, 'bold'),
                              relief='flat',
                              padx=30, pady=10,
-                             cursor='hand2')
+                             cursor='hand2',
+                             activebackground=self.colors['primary_dark'])
         close_btn.pack(pady=(15, 0))
     
     def start_process(self):
@@ -647,6 +763,7 @@ class RSSChinaGUI:
         # Preparar UI
         self.is_running = True
         self.start_button.config(state=tk.DISABLED)
+        self.extract_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
         self.update_status("● Ejecutando...", self.colors['warning'])
         self.clear_output()
@@ -697,6 +814,89 @@ class RSSChinaGUI:
             self.is_running = False
             self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
+            # Restaurar estado del botón de extracción si no está corriendo
+            if not self.is_running:
+                self.root.after(0, lambda: self.extract_button.config(state=tk.NORMAL))
+
+    def start_extraction(self):
+        """Inicia el proceso de extracción de texto completo."""
+        if self.is_running:
+            return
+            
+        # Verificar que existe el archivo de entrada
+        input_file = Path(self.output_dir.get()) / "output.jsonl"
+        if not input_file.exists():
+            messagebox.showerror("Error", 
+                               f"No se encontró el archivo de noticias filtradas: {input_file}\n"
+                               "Ejecuta primero el filtro de noticias.")
+            return
+            
+        # Preparar UI
+        self.is_running = True
+        self.start_button.config(state=tk.DISABLED)
+        self.extract_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.NORMAL)
+        self.update_status("● Extrayendo texto...", self.colors['secondary'])
+        self.clear_output()
+        
+        # Cambiar a tab de logs
+        self.notebook.select(0)
+        
+        # Actualizar nivel de logging
+        logging.getLogger().setLevel(getattr(logging, self.log_level.get()))
+        
+        # Iniciar thread de extracción
+        self.worker_thread = threading.Thread(target=self.run_extraction, daemon=True)
+        self.worker_thread.start()
+
+    def run_extraction(self):
+        """Ejecuta la extracción de texto (en thread separado)."""
+        logger = logging.getLogger(__name__)
+        logger.info("=== Iniciando Extracción de Texto Completo ===")
+        
+        try:
+            input_file = str(Path(self.output_dir.get()) / "output.jsonl")
+            
+            # Configuración básica para el extractor
+            config = {
+                'output': {
+                    'jsonl_path': str(Path(self.output_dir.get()) / "articles_full.jsonl"),
+                    'csv_path': str(Path(self.output_dir.get()) / "articles_full.csv")
+                },
+                'processing': {
+                    'concurrency': 5
+                }
+            }
+            
+            # Ejecutar proceso
+            report = process_articles(input_file, config=config)
+            
+            if self.is_running:
+                self.root.after(0, lambda: self.update_status("● Extracción Completada", self.colors['success']))
+                
+                msg = (f"Extracción completada.\n\n"
+                       f"Total procesado: {report.total_articles}\n"
+                       f"✅ Exitosos: {report.successful}\n"
+                       f"❌ Fallos: {report.failed_download + report.failed_extraction}\n"
+                       f"⚠️ Sin contenido: {report.no_content}")
+                
+                self.root.after(0, lambda: messagebox.showinfo("Éxito", msg))
+                
+        except Exception as e:
+            logger.error(f"Error en la extracción: {e}", exc_info=True)
+            self.root.after(0, lambda: self.update_status("● Error", self.colors['error']))
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Error durante la extracción:\n{str(e)}"))
+            
+        finally:
+            self.is_running = False
+            self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.extract_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
+
+    def open_full_jsonl(self):
+        """Abre el archivo JSONL de artículos completos."""
+        filepath = Path(self.output_dir.get()) / "articles_full.jsonl"
+        self.open_file(filepath)
     
     async def run_async(self):
         """Ejecuta el proceso en modo asíncrono."""

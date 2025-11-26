@@ -1,0 +1,261 @@
+# Configuración del Extractor de Artículos Completos
+# RSS China News Filter - Article Extractor Module
+
+# ============================================================
+# DESCARGA DE HTML
+# ============================================================
+downloader:
+  # Timeout para cada petición HTTP (segundos)
+  timeout: 15
+  
+  # Número máximo de reintentos por URL
+  max_retries: 3
+  
+  # Multiplicador para backoff exponencial (2 = 2s, 4s, 8s...)
+  backoff_multiplier: 2
+  
+  # Delay mínimo entre peticiones al mismo dominio (segundos)
+  # Aumentar si se detectan bloqueos por rate limiting
+  delay_between_requests_same_domain: 1.0
+  
+  # User-Agent para identificar el bot
+  user_agent: "Mozilla/5.0 (compatible; RSSChinaBot-ArticleExtractor/1.0; +https://github.com/tu-usuario/rss-china)"
+  
+  # Headers adicionales
+  headers:
+    Accept-Language: "es-ES,es;q=0.9,en;q=0.8"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Accept-Encoding: "gzip, deflate"
+
+# ============================================================
+# EXTRACCIÓN DE TEXTO
+# ============================================================
+extractor:
+  # Longitud mínima de texto para considerar extracción exitosa (caracteres)
+  min_text_length_ok: 200
+  
+  # Longitud mínima para advertencia (caracteres)
+  min_text_length_warning: 100
+  
+  # Favorecer precisión sobre recall (menos ruido, más estricto)
+  favor_precision: true
+  
+  # Incluir tablas en el texto extraído
+  include_tables: true
+  
+  # Incluir comentarios de usuarios
+  include_comments: false
+  
+  # Incluir enlaces en el texto
+  include_links: false
+  
+  # Selectores BeautifulSoup por dominio (fallback)
+  # Añadir selectores específicos si trafilatura falla consistentemente
+  domain_selectors:
+    elpais.com:
+      - "article.a_c"
+      - "div.a_c_text"
+      - "div.articulo-cuerpo"
+      - "div[itemprop='articleBody']"
+    
+    elmundo.es:
+      - "article.ue-l-article__body"
+      - "div.ue-c-article__body"
+      - "div.ue-c-article__premium-body"
+    
+    abc.es:
+      - "div.voc-article-content"
+      - "div.cuerpo-texto"
+      - "article[itemprop='articleBody']"
+    
+    lavanguardia.com:
+      - "div.article-modules"
+      - "div.article-body"
+      - "div.main-article-body"
+    
+    larazon.es:
+      - "div.article-content"
+      - "div.texto-noticia"
+      - "div.article-body-content"
+
+# ============================================================
+# LIMPIEZA DE TEXTO
+# ============================================================
+cleaner:
+  # Máximo de saltos de línea consecutivos permitidos
+  max_consecutive_newlines: 2
+  
+  # Normalizar unicode (NFKC)
+  normalize_unicode: true
+  
+  # Eliminar fragmentos comunes de navegación/promoción
+  remove_common_fragments: true
+  
+  # Patrones regex a eliminar (fragmentos de navegación, etc.)
+  remove_patterns:
+    - "Leer también:.*?(?=\\n|$)"
+    - "Ver galería.*?(?=\\n|$)"
+    - "Relacionado:.*?(?=\\n|$)"
+    - "Suscríbete.*?(?=\\n|$)"
+    - "Más información.*?(?=\\n|$)"
+    - "\\[foto\\]|\\[vídeo\\]|\\[galería\\]"
+    - "Compartir en.*?(?=\\n|$)"
+    - "Síguenos en.*?(?=\\n|$)"
+
+# ============================================================
+# ENRIQUECIMIENTO DE METADATOS
+# ============================================================
+enricher:
+  # Intentar extraer metadatos adicionales del HTML
+  extract_metadata: true
+  
+  # Detectar idioma del texto
+  detect_language: true
+  
+  # Metadatos a buscar en tags <meta>
+  metadata_fields:
+    og:title: "titulo_og"
+    og:description: "descripcion_og"
+    og:image: "imagen_og"
+    article:author: "autor"
+    article:published_time: "fecha_publicacion"
+    article:section: "seccion"
+
+# ============================================================
+# FALLBACK CON PLAYWRIGHT (JavaScript)
+# ============================================================
+fallback:
+  # IMPORTANTE: Activar solo después de análisis de fallos
+  # Playwright es lento y consume recursos
+  playwright_enabled: false
+  
+  # Timeout para carga de página con Playwright (milisegundos)
+  playwright_timeout: 30000
+  
+  # Navegador a usar (chromium, firefox, webkit)
+  playwright_browser: "chromium"
+  
+  # Ejecutar en modo headless (sin ventana visible)
+  playwright_headless: true
+  
+  # Evento de espera antes de extraer contenido
+  # Opciones: load, domcontentloaded, networkidle
+  playwright_wait_for: "networkidle"
+  
+  # Límite máximo de llamadas a Playwright por ejecución
+  # Evita ejecuciones excesivamente largas
+  max_playwright_calls_per_run: 10
+  
+  # Whitelist de dominios que requieren Playwright
+  # SOLO añadir después de verificar manualmente que requieren JS
+  # Empezar con lista vacía y añadir progresivamente
+  playwright_whitelist_domains: []
+    # Ejemplo:
+    # - "ejemplo-dinamico.com"
+    # - "sitio-con-js.es"
+
+# ============================================================
+# PROCESAMIENTO
+# ============================================================
+processing:
+  # Nivel de concurrencia (1 = secuencial, >1 = paralelo)
+  # Recomendado: 5 para balance entre velocidad y cortesía
+  concurrency: 5
+  
+  # Límite de artículos a procesar por ejecución
+  # null = sin límite, útil para testing con número pequeño
+  max_articles_per_run: null
+  
+  # Saltar artículos ya procesados (verificar por URL en output)
+  skip_already_processed: true
+  
+  # Guardar HTML descargado para debugging (consume espacio)
+  save_html_for_debugging: false
+
+# ============================================================
+# SALIDA
+# ============================================================
+output:
+  # Ruta del archivo JSONL con artículos completos
+  jsonl_path: "data/articles_full.jsonl"
+  
+  # Ruta del archivo CSV con artículos completos
+  csv_path: "data/articles_full.csv"
+  
+  # Ruta del archivo con URLs fallidas
+  failed_path: "data/failed_extractions.jsonl"
+  
+  # Ruta del reporte de ejecución
+  report_path: "data/extraction_report.json"
+  
+  # Encoding para CSV (utf-8-sig incluye BOM para Excel en Windows)
+  csv_encoding: "utf-8-sig"
+  
+  # Incluir HTML en salida JSONL (para debugging, consume espacio)
+  include_html_in_output: false
+
+# ============================================================
+# LOGGING
+# ============================================================
+logging:
+  # Archivo de log
+  log_file: "logs/article_extractor.log"
+  
+  # Nivel de logging (DEBUG, INFO, WARNING, ERROR)
+  log_level: "INFO"
+  
+  # Formato de log
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Formato de fecha en logs
+  date_format: "%Y-%m-%d %H:%M:%S"
+  
+  # Rotar logs cuando alcancen este tamaño (bytes)
+  # 10 MB = 10 * 1024 * 1024
+  max_log_size: 10485760
+  
+  # Número de archivos de log a mantener
+  backup_count: 5
+
+# ============================================================
+# DETECCIÓN DE BLOQUEOS
+# ============================================================
+blocking_detection:
+  # Patrones que indican bloqueo o captcha
+  block_patterns:
+    - "captcha"
+    - "recaptcha"
+    - "hcaptcha"
+    - "access denied"
+    - "acceso denegado"
+    - "blocked"
+    - "bloqueado"
+    - "robot"
+    - "bot detected"
+    - "checking your browser"
+    - "cloudflare"
+    - "enable javascript"
+    - "javascript required"
+  
+  # Tamaño mínimo de HTML para no considerar sospechoso (bytes)
+  min_html_size: 500
+  
+  # Tamaño máximo de HTML para no considerar sospechoso (bytes)
+  # 10 MB = 10 * 1024 * 1024
+  max_html_size: 10485760
+
+# ============================================================
+# CACHE (OPCIONAL - IMPLEMENTACIÓN FUTURA)
+# ============================================================
+cache:
+  # Activar cache de HTML descargado
+  enabled: false
+  
+  # Directorio de cache
+  cache_dir: "data/html_cache"
+  
+  # Tiempo de vida del cache (días)
+  cache_ttl_days: 7
+  
+  # Limpiar cache automáticamente al inicio
+  auto_cleanup: true

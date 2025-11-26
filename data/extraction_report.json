@@ -1,0 +1,14 @@
+{
+  "start_time": "2025-11-26T20:03:53",
+  "end_time": "2025-11-26T20:04:10",
+  "duration_seconds": 16.69608187675476,
+  "total_articles": 55,
+  "successful": 13,
+  "failed_download": 42,
+  "failed_extraction": 0,
+  "no_content": 0,
+  "blocked": 0,
+  "extraction_methods": {
+    "bs4_fallback": 13
+  }
+}
