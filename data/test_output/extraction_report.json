@@ -1,0 +1,14 @@
+{
+  "start_time": "2025-11-27T20:44:15",
+  "end_time": "2025-11-27T20:44:15",
+  "duration_seconds": 0.3040900230407715,
+  "total_articles": 5,
+  "successful": 5,
+  "failed_download": 0,
+  "failed_extraction": 0,
+  "no_content": 0,
+  "blocked": 0,
+  "extraction_methods": {
+    "rss_summary": 5
+  }
+}
