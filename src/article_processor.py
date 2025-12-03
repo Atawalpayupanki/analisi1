@@ -84,12 +84,36 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
         result.error_message = "URL vacía"
         return result
         
+    # 1. Prioridad: Usar descripción del RSS si está disponible
+    rss_description = news_item.get('descripcion', '').strip()
+    
+    # Limpieza básica de la descripción si es necesario
+    cleaner_config = config.get('cleaner', {}) if config else None
+    
+    if rss_description:
+        logger.info(f"Usando descripción RSS para {url}")
+        result.texto = rss_description
+        result.extraction_method = "rss_summary"
+        result.scrape_status = "ok"
+        
+        if cleaner_config:
+             remove_patterns = cleaner_config.get('remove_patterns')
+             result.texto = clean_article_text(result.texto, remove_patterns=remove_patterns)
+        
+        result.idioma = detect_language(result.texto, None)
+        result.char_count = len(result.texto)
+        result.word_count = len(result.texto.split())
+        
+        # No descargamos ni extraemos si ya tenemos el resumen
+        return result
+
+    # 2. Si no hay resumen, intentar Scraping
     # Configuración
     timeout = 15
     if config and 'downloader' in config:
         timeout = config['downloader'].get('timeout', 15)
         
-    # 1. Descarga
+    # Descarga
     download_res = download_article_html(url, timeout=timeout)
     result.download_time = download_res.download_time
     
@@ -105,29 +129,29 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
         result.error_message = download_res.error_message or "HTML vacío"
         return result
         
-    # 2. Extracción
+    # Extracción
     start_extract = time.time()
     extractor_config = config.get('extractor', {}) if config else None
     extract_res = extract_article_text(download_res.html, url, extractor_config)
     result.extraction_time = time.time() - start_extract
     result.extraction_method = extract_res.extraction_method
     
+    # Limpieza
     if extract_res.extraction_status != 'ok' or not extract_res.text:
         result.scrape_status = extract_res.extraction_status
-        result.error_message = "No se pudo extraer texto"
+        result.error_message = "No se pudo extraer texto ni hay resumen RSS"
         return result
+    else:
+        # Caso normal: extracción exitosa
+        remove_patterns = cleaner_config.get('remove_patterns') if cleaner_config else None
         
-    # 3. Limpieza
-    cleaner_config = config.get('cleaner', {}) if config else None
-    remove_patterns = cleaner_config.get('remove_patterns') if cleaner_config else None
-    
-    clean_text = clean_article_text(extract_res.text, remove_patterns=remove_patterns)
-    
-    result.texto = clean_text
-    result.idioma = detect_language(clean_text, extract_res.language)
-    result.char_count = len(clean_text)
-    result.word_count = len(clean_text.split())
-    result.scrape_status = "ok"
+        clean_text = clean_article_text(extract_res.text, remove_patterns=remove_patterns)
+        
+        result.texto = clean_text
+        result.idioma = detect_language(clean_text, extract_res.language)
+        result.char_count = len(clean_text)
+        result.word_count = len(clean_text.split())
+        result.scrape_status = "ok"
     
     # Metadatos extra
     if extract_res.metadata:

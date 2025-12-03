@@ -1,14 +1,15 @@
 {
-  "start_time": "2025-11-26T20:03:53",
-  "end_time": "2025-11-26T20:04:10",
-  "duration_seconds": 16.69608187675476,
-  "total_articles": 55,
-  "successful": 13,
-  "failed_download": 42,
+  "start_time": "2025-11-27T20:51:34",
+  "end_time": "2025-11-27T20:51:35",
+  "duration_seconds": 0.8851475715637207,
+  "total_articles": 56,
+  "successful": 56,
+  "failed_download": 0,
   "failed_extraction": 0,
   "no_content": 0,
   "blocked": 0,
   "extraction_methods": {
-    "bs4_fallback": 13
+    "rss_summary": 55,
+    "bs4_fallback": 1
   }
 }
