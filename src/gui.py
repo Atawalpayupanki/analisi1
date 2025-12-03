@@ -430,16 +430,370 @@ class RSSChinaGUI:
         
         # Panel Izquierdo: Lista
         left_frame = tk.Frame(paned, bg='white')
+        paned.add(left_frame, width=400)
+        
+        # Toolbar búsqueda
+        search_frame = tk.Frame(left_frame, bg='white', pady=5)
+        search_frame.pack(fill=tk.X, padx=5)
+        tk.Label(search_frame, text="Buscar:", bg='white').pack(side=tk.LEFT, padx=5)
+        ttk.Entry(search_frame, textvariable=self.article_search_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # Lista de artículos
+        self.articles_list = ttk.Treeview(left_frame, columns=('titular',), show='tree headings', selectmode='browse')
+        self.articles_list.heading('#0', text='#')
+        self.articles_list.heading('titular', text='Titular')
+        self.articles_list.column('#0', width=50)
+        self.articles_list.column('titular', width=350)
+        
+        sb = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.articles_list.yview)
+        self.articles_list.configure(yscroll=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.articles_list.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.articles_list.bind('<<TreeviewSelect>>', self.on_article_select)
+        
+        # Panel Derecho: Contenido
+        right_frame = tk.Frame(paned, bg='white')
+        paned.add(right_frame)
+        
+        # Header del artículo
+        header_frame = tk.Frame(right_frame, bg='white', pady=10, padx=10)
+        header_frame.pack(fill=tk.X)
+        
+        self.article_header = tk.Label(header_frame, text="Selecciona un artículo", 
+                                       font=('Segoe UI', 14, 'bold'), bg='white', 
+                                       wraplength=600, justify=tk.LEFT)
+        self.article_header.pack(anchor='w')
+        
+        self.article_meta = tk.Label(header_frame, text="", 
+                                     font=('Segoe UI', 9), bg='white', 
+                                     fg=self.colors['text_light'])
+        self.article_meta.pack(anchor='w', pady=(5, 0))
+        
+        ttk.Separator(right_frame, orient='horizontal').pack(fill='x', padx=10)
+        
+        # Contenido del artículo
+        self.article_content = scrolledtext.ScrolledText(right_frame, wrap=tk.WORD, 
+                                                         font=('Segoe UI', 10), 
+                                                         padx=15, pady=15)
+        self.article_content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    def on_article_select(self, event):
+        """Maneja la selección de un artículo."""
+        selection = self.articles_list.selection()
         if not selection: return
         
         idx = int(self.articles_list.item(selection[0])['text'])
+        if idx >= len(self.full_articles_data): return
+        
         data = self.full_articles_data[idx]
         
         self.article_header.config(text=data.get('titular', ''))
         self.article_meta.config(text=f"{data.get('nombre_del_medio')} | {data.get('fecha')}")
         
         self.article_content.delete('1.0', tk.END)
-        self.article_content.insert('1.0', data.get('texto_completo') or data.get('descripcion', ''))
+        self.article_content.insert('1.0', data.get('texto') or data.get('descripcion', ''))
+    
+    def setup_reports_tab(self):
+        """Configura la pestaña de Reportes."""
+        # Estadísticas de extracción
+        stats_card = tk.LabelFrame(self.tab_reports, text="Estadísticas de Extracción", 
+                                  bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
+                                  padx=15, pady=15)
+        stats_card.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.report_labels = {}
+        report_stats = [
+            ('total_articles', '📊 Total Artículos'),
+            ('successful', '✅ Exitosos'),
+            ('failed_download', '❌ Fallos Descarga'),
+            ('failed_extraction', '⚠️ Fallos Extracción'),
+            ('no_content', '📭 Sin Contenido'),
+            ('blocked', '🚫 Bloqueados')
+        ]
+        
+        for i, (key, label) in enumerate(report_stats):
+            row = i // 3
+            col = (i % 3) * 2
+            
+            tk.Label(stats_card, text=label, bg=self.colors['card_bg']).grid(
+                row=row, column=col, sticky='w', padx=(0, 10), pady=5)
+            
+            val = tk.Label(stats_card, text="0", bg=self.colors['card_bg'], 
+                          font=('Segoe UI', 12, 'bold'))
+            val.grid(row=row, column=col+1, sticky='w', padx=(0, 20), pady=5)
+            self.report_labels[key] = val
+        
+        # Tabla de errores
+        errors_card = tk.LabelFrame(self.tab_reports, text="Errores de Extracción",
+                                   bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
+                                   padx=10, pady=10)
+        errors_card.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        columns = ('url', 'error', 'timestamp')
+        self.errors_tree = ttk.Treeview(errors_card, columns=columns, show='headings', height=10)
+        
+        self.errors_tree.heading('url', text='URL')
+        self.errors_tree.heading('error', text='Error')
+        self.errors_tree.heading('timestamp', text='Timestamp')
+        
+        self.errors_tree.column('url', width=400)
+        self.errors_tree.column('error', width=300)
+        self.errors_tree.column('timestamp', width=150)
+        
+        sb = ttk.Scrollbar(errors_card, orient=tk.VERTICAL, command=self.errors_tree.yview)
+        self.errors_tree.configure(yscroll=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.errors_tree.pack(fill=tk.BOTH, expand=True)
+    
+    def setup_logging(self):
+        """Configura el sistema de logging."""
+        # Handler para el widget de texto
+        text_handler = TextHandler(self.log_preview, self.log_queue)
+        text_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        
+        # Configurar root logger
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        logger.addHandler(text_handler)
+    
+    def check_log_queue(self):
+        """Revisa la cola de logs y actualiza los widgets."""
+        try:
+            while True:
+                msg = self.log_queue.get_nowait()
+                # Agregar a preview
+                self.log_preview.insert(tk.END, msg + '\n')
+                self.log_preview.see(tk.END)
+                # Agregar a log completo
+                self.full_log_text.insert(tk.END, msg + '\n')
+                self.full_log_text.see(tk.END)
+        except:
+            pass
+        
+        # Programar siguiente revisión
+        self.root.after(100, self.check_log_queue)
+    
+    def start_process(self):
+        """Inicia el proceso de descarga y filtrado."""
+        if self.is_running:
+            messagebox.showwarning("Advertencia", "Ya hay un proceso en ejecución")
+            return
+        
+        self.is_running = True
+        self.start_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.NORMAL)
+        self.status_label.config(text="● Ejecutando...", fg=self.colors['success'])
+        
+        # Resetear estadísticas
+        for key in self.stats:
+            self.stats[key] = 0
+            if key in self.stats_labels:
+                self.stats_labels[key].config(text="0")
+        
+        # Limpiar datos previos
+        self.failed_feeds = []
+        
+        # Ejecutar en thread separado
+        self.worker_thread = threading.Thread(target=self.run_process, daemon=True)
+        self.worker_thread.start()
+    
+    def stop_process(self):
+        """Detiene el proceso en ejecución."""
+        if not self.is_running:
+            return
+        
+        self.is_running = False
+        self.start_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
+        self.status_label.config(text="● Detenido", fg=self.colors['error'])
+        logging.info("Proceso detenido por el usuario")
+    
+    def run_process(self):
+        """Ejecuta el proceso principal en un thread separado."""
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info("=== Iniciando proceso ===")
+            
+            # 1. Cargar feeds
+            feeds = load_feeds(self.config_file.get())
+            self.stats['feeds_total'] = len(feeds)
+            self.update_stats()
+            
+            # 2. Cargar keywords
+            keywords = load_keywords(self.keywords_file.get())
+            
+            # 3. Descargar feeds
+            if self.use_async.get():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                download_results = loop.run_until_complete(download_feeds_async(feeds))
+                loop.close()
+            else:
+                download_results = download_feeds_sync(feeds)
+            
+            # 4. Parsear
+            all_items = []
+            for url, nombre, content in download_results:
+                if not self.is_running:
+                    break
+                if content:
+                    items = parse_feed(content, url, nombre)
+                    all_items.extend(items)
+                    self.stats['feeds_ok'] += 1
+                else:
+                    self.stats['feeds_error'] += 1
+                    self.failed_feeds.append((nombre, url, "Sin contenido"))
+                self.update_stats()
+            
+            self.stats['items_total'] = len(all_items)
+            self.update_stats()
+            
+            # 5. Filtrar
+            china_items = filter_china_news(all_items, keywords)
+            self.stats['items_china'] = len(china_items)
+            self.update_stats()
+            
+            # 6. Deduplicar
+            unique_items = deduplicate(china_items)
+            self.stats['items_unique'] = len(unique_items)
+            self.update_stats()
+            
+            # 7. Guardar
+            if unique_items:
+                save_results(unique_items, self.output_dir.get())
+                logger.info(f"Guardados {len(unique_items)} resultados")
+            
+            logger.info("=== Proceso completado ===")
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", 
+                f"Proceso completado\n{self.stats['items_unique']} noticias guardadas"))
+            
+        except Exception as e:
+            logger.error(f"Error en proceso: {e}", exc_info=True)
+            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        finally:
+            self.is_running = False
+            self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
+            self.root.after(0, lambda: self.status_label.config(text="● Listo", 
+                                                                fg=self.colors['text_light']))
+    
+    def update_stats(self):
+        """Actualiza las etiquetas de estadísticas."""
+        for key, value in self.stats.items():
+            if key in self.stats_labels:
+                self.root.after(0, lambda k=key, v=value: self.stats_labels[k].config(text=str(v)))
+    
+    def start_extraction(self):
+        """Inicia la extracción de texto completo."""
+        input_file = Path(self.output_dir.get()) / "output.jsonl"
+        if not input_file.exists():
+            messagebox.showerror("Error", "No se encontró output.jsonl. Ejecuta primero el proceso principal.")
+            return
+        
+        if self.is_running:
+            messagebox.showwarning("Advertencia", "Ya hay un proceso en ejecución")
+            return
+        
+        self.is_running = True
+        self.extract_button.config(state=tk.DISABLED)
+        self.status_label.config(text="● Extrayendo...", fg=self.colors['secondary'])
+        
+        # Ejecutar en thread separado
+        thread = threading.Thread(target=self.run_extraction, args=(str(input_file),), daemon=True)
+        thread.start()
+    
+    def run_extraction(self, input_file):
+        """Ejecuta la extracción en un thread separado."""
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info("Iniciando extracción de texto completo...")
+            
+            report = process_articles(input_file)
+            
+            logger.info(f"Extracción completada: {report.successful} exitosos, {report.failed_download + report.failed_extraction} fallos")
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", 
+                f"Extracción completada\n{report.successful} artículos procesados"))
+            
+        except Exception as e:
+            logger.error(f"Error en extracción: {e}", exc_info=True)
+            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        finally:
+            self.is_running = False
+            self.root.after(0, lambda: self.extract_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.status_label.config(text="● Listo", 
+                                                                fg=self.colors['text_light']))
+    
+    def load_results(self):
+        """Carga los resultados desde el archivo JSONL."""
+        jsonl_path = Path(self.output_dir.get()) / "output.jsonl"
+        if not jsonl_path.exists():
+            return
+        
+        try:
+            self.results_data = []
+            with open(jsonl_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        self.results_data.append(json.loads(line))
+            
+            self.filter_results()
+        except Exception as e:
+            logging.error(f"Error cargando resultados: {e}")
+    
+    def filter_results(self, event=None):
+        """Filtra y muestra los resultados en la tabla."""
+        # Limpiar tabla
+        for item in self.results_tree.get_children():
+            self.results_tree.delete(item)
+        
+        search_term = self.search_var.get().lower()
+        filtered = []
+        
+        for item in self.results_data:
+            if search_term:
+                if (search_term in item.get('titular', '').lower() or
+                    search_term in item.get('nombre_del_medio', '').lower()):
+                    filtered.append(item)
+            else:
+                filtered.append(item)
+        
+        # Insertar en tabla
+        for item in filtered:
+            self.results_tree.insert('', 'end', values=(
+                item.get('nombre_del_medio', ''),
+                item.get('titular', ''),
+                item.get('fecha', ''),
+                item.get('enlace', '')
+            ))
+        
+        self.results_count_label.config(text=f"{len(filtered)} resultados")
+    
+    def load_full_articles(self):
+        """Carga los artículos completos desde el archivo JSONL."""
+        articles_path = Path(self.output_dir.get()) / "articles_full.jsonl"
+        if not articles_path.exists():
+            articles_path = Path("data") / "articles_full.jsonl"
+        
+        if not articles_path.exists():
+            return
+        
+        try:
+            self.full_articles_data = []
+            with open(articles_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        self.full_articles_data.append(json.loads(line))
+            
+            # Limpiar lista
+            for item in self.articles_list.get_children():
+                self.articles_list.delete(item)
+            
+            # Insertar artículos
+            for i, article in enumerate(self.full_articles_data):
+                self.articles_list.insert('', 'end', text=str(i), 
+                                         values=(article.get('titular', ''),))
+        except Exception as e:
+            logging.error(f"Error cargando artículos: {e}")
 
     def load_reports(self):
         """Carga reportes y errores."""
