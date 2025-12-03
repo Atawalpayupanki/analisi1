@@ -18,11 +18,15 @@ try:
     from src.article_extractor import extract_article_text
     from src.article_cleaner import clean_article_text
     from src.article_enricher import detect_language
+    from src.custom_scrapers import scrape_custom
+
 except ImportError:
     from article_downloader import download_article_html
     from article_extractor import extract_article_text
     from article_cleaner import clean_article_text
     from article_enricher import detect_language
+    from custom_scrapers import scrape_custom
+
 
 logger = logging.getLogger(__name__)
 
@@ -84,18 +88,20 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
         result.error_message = "URL vacía"
         return result
         
-    # 1. Prioridad: Usar descripción del RSS si está disponible
-    rss_description = news_item.get('descripcion', '').strip()
-    
     # Limpieza básica de la descripción si es necesario
     cleaner_config = config.get('cleaner', {}) if config else None
-    
-    if rss_description:
-        logger.info(f"Usando descripción RSS para {url}")
-        result.texto = rss_description
-        result.extraction_method = "rss_summary"
-        result.scrape_status = "ok"
+
+    # 1. Intentar Scraping Personalizado
+    custom_data = scrape_custom(url, result.nombre_del_medio)
+    if custom_data and custom_data.get('texto'):
+        result.texto = custom_data['texto']
+        # Usar el título extraído si es mejor que el del RSS
+        if not result.titular and custom_data.get('titulo'):
+            result.titular = custom_data['titulo']
+            
+        result.extraction_method = "custom_scraper"
         
+        # Limpieza post-extracción personalizada
         if cleaner_config:
              remove_patterns = cleaner_config.get('remove_patterns')
              result.texto = clean_article_text(result.texto, remove_patterns=remove_patterns)
@@ -103,11 +109,10 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
         result.idioma = detect_language(result.texto, None)
         result.char_count = len(result.texto)
         result.word_count = len(result.texto.split())
-        
-        # No descargamos ni extraemos si ya tenemos el resumen
+        result.scrape_status = "ok"
         return result
 
-    # 2. Si no hay resumen, intentar Scraping
+    # 2. Intentar Scraping Genérico
     # Configuración
     timeout = 15
     if config and 'downloader' in config:
@@ -117,48 +122,70 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
     download_res = download_article_html(url, timeout=timeout)
     result.download_time = download_res.download_time
     
+    # Si la descarga falla, pero tenemos descripción RSS, usaremos eso como fallback al final
+    download_failed = False
     if download_res.status_code and download_res.status_code >= 400:
-        result.scrape_status = "error_descarga"
+        download_failed = True
         result.error_message = download_res.error_message or f"HTTP {download_res.status_code}"
+    elif not download_res.html:
+        download_failed = True
+        result.error_message = download_res.error_message or "HTML vacío"
+
+    if not download_failed:
+        # Extracción Genérica
+        start_extract = time.time()
+        extractor_config = config.get('extractor', {}) if config else None
+        extract_res = extract_article_text(download_res.html, url, extractor_config)
+        result.extraction_time = time.time() - start_extract
+        
+        if extract_res.extraction_status == 'ok' and extract_res.text:
+            result.extraction_method = extract_res.extraction_method
+            
+            remove_patterns = cleaner_config.get('remove_patterns') if cleaner_config else None
+            clean_text = clean_article_text(extract_res.text, remove_patterns=remove_patterns)
+            
+            result.texto = clean_text
+            result.idioma = detect_language(clean_text, extract_res.language)
+            result.char_count = len(clean_text)
+            result.word_count = len(clean_text.split())
+            result.scrape_status = "ok"
+            
+            # Metadatos extra
+            if extract_res.metadata:
+                result.autor = extract_res.metadata.get('author')
+                result.fecha_publicacion = extract_res.metadata.get('date')
+                
+            return result
+
+    # 3. Fallback: Usar descripción del RSS si todo lo demás falló
+    rss_description = news_item.get('descripcion', '').strip()
+    if rss_description:
+        logger.info(f"Usando descripción RSS como fallback para {url}")
+        result.texto = rss_description
+        result.extraction_method = "rss_summary_fallback"
+        result.scrape_status = "ok" # Consideramos ok porque tenemos ALGO de contenido
+        
+        if cleaner_config:
+             remove_patterns = cleaner_config.get('remove_patterns')
+             result.texto = clean_article_text(result.texto, remove_patterns=remove_patterns)
+        
+        result.idioma = detect_language(result.texto, None)
+        result.char_count = len(result.texto)
+        result.word_count = len(result.texto.split())
+        
+        return result
+    
+    # Si llegamos aquí, falló todo
+    if download_failed:
+        result.scrape_status = "error_descarga"
         if download_res.is_blocked:
             result.scrape_status = "blocked_fallback_required"
-        return result
-        
-    if not download_res.html:
-        result.scrape_status = "error_descarga"
-        result.error_message = download_res.error_message or "HTML vacío"
-        return result
-        
-    # Extracción
-    start_extract = time.time()
-    extractor_config = config.get('extractor', {}) if config else None
-    extract_res = extract_article_text(download_res.html, url, extractor_config)
-    result.extraction_time = time.time() - start_extract
-    result.extraction_method = extract_res.extraction_method
-    
-    # Limpieza
-    if extract_res.extraction_status != 'ok' or not extract_res.text:
-        result.scrape_status = extract_res.extraction_status
-        result.error_message = "No se pudo extraer texto ni hay resumen RSS"
-        return result
     else:
-        # Caso normal: extracción exitosa
-        remove_patterns = cleaner_config.get('remove_patterns') if cleaner_config else None
-        
-        clean_text = clean_article_text(extract_res.text, remove_patterns=remove_patterns)
-        
-        result.texto = clean_text
-        result.idioma = detect_language(clean_text, extract_res.language)
-        result.char_count = len(clean_text)
-        result.word_count = len(clean_text.split())
-        result.scrape_status = "ok"
-    
-    # Metadatos extra
-    if extract_res.metadata:
-        result.autor = extract_res.metadata.get('author')
-        result.fecha_publicacion = extract_res.metadata.get('date')
+        result.scrape_status = "no_contenido"
+        result.error_message = "No se pudo extraer texto ni hay resumen RSS"
         
     return result
+
 
 def save_results(results: List[ArticleResult], output_dir: str, base_name: str = "articles_full"):
     """Guarda los resultados en JSONL y CSV."""

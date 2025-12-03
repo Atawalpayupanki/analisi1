@@ -23,50 +23,52 @@ class ExtractionResult:
 
 def extract_with_fallback_bs4(html: str, url: str) -> ExtractionResult:
     """
-    Intenta extraer texto usando BeautifulSoup y selectores específicos.
-    Ahora extrae SOLO párrafos del cuerpo del artículo, excluyendo comentarios y contenido extra.
+    Extrae texto usando BeautifulSoup con el mismo método que los ejemplos de scrap el mundo y scrap el pais.
+    Primero busca el contenedor del artículo, luego extrae todos los párrafos dentro de él.
     """
     try:
         domain = urlparse(url).netloc
         # Eliminar 'www.' si existe para buscar en el diccionario
         domain_key = domain.replace('www.', '')
         
-        # Selectores específicos por dominio - SOLO PÁRRAFOS DEL ARTÍCULO
-        domain_paragraph_selectors = {
+        # Selectores específicos por dominio - CONTENEDORES DEL ARTÍCULO
+        # Siguiendo el patrón de los ejemplos: primero encontrar el contenedor, luego los párrafos
+        domain_body_selectors = {
             'elpais.com': [
-                'div.a_c_text p',  # Párrafos dentro del contenedor principal
-                'div.articulo-cuerpo p',
-                'div[itemprop="articleBody"] p'
+                'article',  # Método del ejemplo scrap_elpais.py
+                'div.a_c_text',
+                'div.articulo-cuerpo',
+                'div[itemprop="articleBody"]'
             ],
             'elmundo.es': [
-                'div.ue-c-article__body p',  # Párrafos del cuerpo del artículo
-                'article.ue-l-article__body p',
-                'div.ue-c-article__premium-body p'
+                'div.ue-l-article__body',  # Método del ejemplo scrape_elmundo.py
+                'div.ue-c-article__body',
+                'div.ue-c-article__premium-body'
             ],
             'abc.es': [
-                'div.voc-article-content p',  # Párrafos del contenido del artículo
-                'div.cuerpo-texto p',
-                'article[itemprop="articleBody"] p'
+                'div.voc-article-content',
+                'div.cuerpo-texto',
+                'article[itemprop="articleBody"]'
             ],
             'lavanguardia.com': [
-                'div.article-modules p',
-                'div.article-body p',
-                'div.main-article-body p'
+                'div.article-modules',
+                'div.article-body',
+                'div.main-article-body'
             ],
             'larazon.es': [
-                'div.article-content p',
-                'div.texto-noticia p',
-                'div.article-body-content p'
+                'div.article-content',
+                'div.texto-noticia',
+                'div.article-body-content'
             ]
         }
         
-        # Selectores genéricos de párrafos
-        generic_paragraph_selectors = [
-            'article p',
-            'main p',
-            'div[role="main"] p',
-            'div.content p',
-            'div.article p'
+        # Selectores genéricos de contenedores
+        generic_body_selectors = [
+            'article',
+            'main',
+            'div[role="main"]',
+            'div.content',
+            'div.article'
         ]
         
         soup = BeautifulSoup(html, 'lxml')
@@ -89,42 +91,54 @@ def extract_with_fallback_bs4(html: str, url: str) -> ExtractionResult:
                 element.decompose()
         
         # Obtener selectores específicos del dominio
-        paragraph_selectors = domain_paragraph_selectors.get(domain_key, [])
-        paragraph_selectors.extend(generic_paragraph_selectors)
+        body_selectors = domain_body_selectors.get(domain_key, [])
+        body_selectors.extend(generic_body_selectors)
         
-        paragraphs = []
+        # MÉTODO DE LOS EJEMPLOS: Buscar el contenedor del artículo primero
+        article_body = None
+        for selector in body_selectors:
+            article_body = soup.find(selector.split()[0], class_=selector.split('.')[-1] if '.' in selector else None) if '.' in selector else soup.find(selector)
+            if article_body:
+                logger.info(f"Contenedor encontrado con selector: {selector}")
+                break
         
-        # Intentar con cada selector hasta encontrar párrafos
-        for selector in paragraph_selectors:
-            elements = soup.select(selector)
-            if elements:
-                # Extraer texto de cada párrafo
-                for p in elements:
-                    text = p.get_text(strip=True)
-                    # Solo incluir párrafos con contenido sustancial
-                    if len(text) > 30:  # Filtrar párrafos muy cortos
-                        paragraphs.append(text)
-                
-                # Si encontramos suficientes párrafos, usar este selector
-                if len(paragraphs) > 3:
+        # Si no encontramos con find(), intentar con select()
+        if not article_body:
+            for selector in body_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    article_body = elements[0]
+                    logger.info(f"Contenedor encontrado con select: {selector}")
                     break
         
-        if paragraphs:
-            # Unir párrafos con doble salto de línea
-            extracted_text = '\n\n'.join(paragraphs)
+        if article_body:
+            # MÉTODO DE LOS EJEMPLOS: Obtener todos los párrafos dentro del contenedor
+            paragraphs = article_body.find_all('p')
             
-            return ExtractionResult(
-                text=extracted_text,
-                language=None, # BS4 no detecta idioma
-                extraction_method='bs4_fallback',
-                extraction_status='ok'
-            )
-        else:
-            return ExtractionResult(
-                text=None,
-                extraction_method='bs4_fallback',
-                extraction_status='no_content'
-            )
+            # Extraer texto de cada párrafo, filtrando los vacíos
+            text_paragraphs = []
+            for p in paragraphs:
+                text = p.get_text(strip=True)
+                if text:  # Solo incluir párrafos con contenido
+                    text_paragraphs.append(text)
+            
+            if text_paragraphs:
+                # MÉTODO DE LOS EJEMPLOS: Unir con doble salto de línea
+                extracted_text = '\n\n'.join(text_paragraphs)
+                
+                return ExtractionResult(
+                    text=extracted_text,
+                    language=None,  # BS4 no detecta idioma
+                    extraction_method='bs4_fallback',
+                    extraction_status='ok'
+                )
+        
+        # Si no encontramos contenido, retornar no_content
+        return ExtractionResult(
+            text=None,
+            extraction_method='bs4_fallback',
+            extraction_status='no_content'
+        )
 
     except Exception as e:
         logger.warning(f"Error en fallback BS4 para {url}: {e}")

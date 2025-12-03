@@ -29,6 +29,12 @@ tenacity>=8.2.0             # Retry logic with exponential backoff
 tqdm>=4.66.0                # Progress bars
 
 # ============================================================
+# PYTHON COMPATIBILITY & SYSTEM DEPENDENCIES
+# ============================================================
+setuptools>=65.0.0          # Required for pkg_resources (fixes ModuleNotFoundError)
+importlib-metadata>=4.0.0   # Metadata for installed packages (Python < 3.10 compatibility)
+
+# ============================================================
 # GUI (Tkinter viene con Python, pero necesitamos PIL)
 # ============================================================
 Pillow>=10.0.0              # Image processing for GUI
