@@ -1,12 +1,11 @@
 """
 Módulo de extracción de texto para artículos de noticias.
-Utiliza Trafilatura como método principal y BeautifulSoup como fallback.
+Utiliza BeautifulSoup con selectores CSS específicos por dominio.
 """
 
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
-import trafilatura
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
@@ -21,62 +20,6 @@ class ExtractionResult:
     extraction_status: str = 'error' # 'ok', 'no_content', 'error'
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-def extract_with_trafilatura(html: str, url: str, config: Optional[dict] = None) -> ExtractionResult:
-    """
-    Intenta extraer texto usando la librería Trafilatura.
-    """
-    try:
-        # Configuración por defecto
-        include_tables = True
-        include_comments = False
-        favor_precision = True
-        
-        if config:
-            include_tables = config.get('include_tables', True)
-            include_comments = config.get('include_comments', False)
-            favor_precision = config.get('favor_precision', True)
-
-        # Extraer texto
-        text = trafilatura.extract(
-            html,
-            url=url,
-            include_tables=include_tables,
-            include_comments=include_comments,
-            favor_precision=favor_precision,
-            output_format='txt'
-        )
-        
-        # Extraer metadatos
-        metadata_raw = trafilatura.extract_metadata(html, url=url)
-        metadata = {}
-        language = None
-        
-        if metadata_raw:
-            metadata = metadata_raw.as_dict()
-            language = metadata.get('language')
-
-        if text and len(text.strip()) > 0:
-            return ExtractionResult(
-                text=text,
-                language=language,
-                extraction_method='trafilatura',
-                extraction_status='ok',
-                metadata=metadata
-            )
-        else:
-            return ExtractionResult(
-                text=None,
-                extraction_method='trafilatura',
-                extraction_status='no_content'
-            )
-            
-    except Exception as e:
-        logger.warning(f"Error en extracción trafilatura para {url}: {e}")
-        return ExtractionResult(
-            text=None,
-            extraction_method='trafilatura',
-            extraction_status='error'
-        )
 
 def extract_with_fallback_bs4(html: str, url: str) -> ExtractionResult:
     """
@@ -193,7 +136,7 @@ def extract_with_fallback_bs4(html: str, url: str) -> ExtractionResult:
 
 def extract_article_text(html: str, url: str, config: Optional[dict] = None) -> ExtractionResult:
     """
-    Función principal de extracción. Orquesta los diferentes métodos.
+    Función principal de extracción usando BeautifulSoup.
     
     Args:
         html: Contenido HTML
@@ -209,39 +152,25 @@ def extract_article_text(html: str, url: str, config: Optional[dict] = None) -> 
             extraction_method='none',
             extraction_status='no_content'
         )
-        
-    # 1. Intentar Trafilatura (Nivel 1)
-    result = extract_with_trafilatura(html, url, config)
     
     min_length = 200
     if config:
         min_length = config.get('min_text_length_ok', 200)
     
-    # Si es exitoso y tiene longitud suficiente, retornar
-    if result.extraction_status == 'ok' and result.text and len(result.text) >= min_length:
-        return result
-        
-    # 2. Intentar Fallback BS4 (Nivel 2)
-    # Si trafilatura falló o devolvió texto muy corto
-    logger.info(f"Trafilatura insuficiente para {url}, intentando fallback BS4...")
+    # Usar BeautifulSoup directamente como método principal
+    logger.info(f"Extrayendo contenido de {url} con BeautifulSoup...")
     bs4_result = extract_with_fallback_bs4(html, url)
     
     if bs4_result.extraction_status == 'ok' and bs4_result.text and len(bs4_result.text) >= min_length:
-        # Preservar metadatos de trafilatura si existen
-        bs4_result.metadata = result.metadata
-        if not bs4_result.language:
-            bs4_result.language = result.language
         return bs4_result
-        
-    # Si ambos fallan, retornar el mejor resultado (probablemente el de trafilatura aunque sea corto, o error)
-    # Pero marcando el estado apropiado
     
-    if result.text and len(result.text) > 0:
-        result.extraction_status = 'no_content' # Texto insuficiente
-        return result
+    # Si BS4 no extrajo suficiente contenido
+    if bs4_result.text and len(bs4_result.text) > 0:
+        bs4_result.extraction_status = 'no_content'  # Texto insuficiente
+        return bs4_result
         
     return ExtractionResult(
         text=None,
-        extraction_method='all_failed',
+        extraction_method='bs4_failed',
         extraction_status='no_content'
     )
