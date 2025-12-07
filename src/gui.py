@@ -50,6 +50,14 @@ from deduplicador import deduplicate
 from almacenamiento import save_results
 from article_processor import process_articles
 
+# Importar clasificador LangChain
+try:
+    from clasificador_langchain import clasificar_noticia_con_failover
+    CLASIFICADOR_DISPONIBLE = True
+except ImportError:
+    CLASIFICADOR_DISPONIBLE = False
+    logging.warning("Módulo clasificador_langchain no disponible. Instala dependencias: pip install langchain langchain-groq python-dotenv")
+
 
 class TextHandler(logging.Handler):
     """Handler personalizado para redirigir logs a un widget de texto."""
@@ -97,6 +105,7 @@ class RSSChinaGUI:
         self.results_data: List[NewsItem] = []
         self.full_articles_data: List[Dict] = []
         self.failed_feeds: List[tuple] = []
+        self.classified_data: List[Dict] = []
         
         # Variables de configuración
         self.config_file = tk.StringVar(value="config/feeds.json")
@@ -117,10 +126,43 @@ class RSSChinaGUI:
             'items_unique': 0
         }
         
+        # Estadísticas de clasificación
+        self.classification_stats = {
+            'total': 0,
+            'classified': 0,
+            'failed': 0,
+            'temas': {},
+            'imagenes': {}
+        }
+        
+        # Agregar CLASIFICADOR_DISPONIBLE como variable de instancia
+        self.CLASIFICADOR_DISPONIBLE = CLASIFICADOR_DISPONIBLE
+        
+        # Agregar métodos de clasificación dinámicamente ANTES de setup_ui
+        if CLASIFICADOR_DISPONIBLE:
+            try:
+                from gui_classification_methods import (
+                    start_classification, run_classification, load_classifications,
+                    filter_classifications, update_classification_stats,
+                    export_classifications_json, export_classifications_csv
+                )
+                self.start_classification = lambda: start_classification(self)
+                self.run_classification = lambda f: run_classification(self, f)
+                self.load_classifications = lambda: load_classifications(self)
+                self.filter_classifications = lambda e=None: filter_classifications(self, e)
+                self.update_classification_stats = lambda: update_classification_stats(self)
+                self.export_classifications_json = lambda: export_classifications_json(self)
+                self.export_classifications_csv = lambda: export_classifications_csv(self)
+                logging.info("Métodos de clasificación cargados correctamente")
+            except ImportError as e:
+                logging.error(f"No se pudieron cargar métodos de clasificación: {e}", exc_info=True)
+                self.CLASIFICADOR_DISPONIBLE = False
+        
         self.setup_styles()
         self.setup_ui()
         self.setup_logging()
         self.check_log_queue()
+
     
     def setup_styles(self):
         """Configura estilos personalizados."""
@@ -228,12 +270,14 @@ class RSSChinaGUI:
         self.tab_logs = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.tab_results = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.tab_articles = tk.Frame(self.notebook, bg=self.colors['bg'])
+        self.tab_classifications = tk.Frame(self.notebook, bg=self.colors['bg'])
         self.tab_reports = tk.Frame(self.notebook, bg=self.colors['bg'])
         
         self.notebook.add(self.tab_control, text='🎛️ Control')
         self.notebook.add(self.tab_logs, text='📋 Logs')
         self.notebook.add(self.tab_results, text='📰 Resultados RSS')
         self.notebook.add(self.tab_articles, text='📄 Artículos Completos')
+        self.notebook.add(self.tab_classifications, text='🏷️ Clasificaciones')
         self.notebook.add(self.tab_reports, text='📊 Reportes')
         
         # Configurar contenido de cada pestaña
@@ -241,6 +285,7 @@ class RSSChinaGUI:
         self.setup_logs_tab()
         self.setup_results_tab()
         self.setup_full_articles_tab()
+        self.setup_classifications_tab()
         self.setup_reports_tab()
         
         # Bind para cargar datos al cambiar de pestaña
@@ -312,6 +357,19 @@ class RSSChinaGUI:
                                       font=('Segoe UI', 10, 'bold'), relief='flat',
                                       padx=20, pady=10, cursor='hand2')
         self.extract_button.pack(fill=tk.X, pady=5)
+        
+        # Botón de clasificación
+        if CLASIFICADOR_DISPONIBLE:
+            self.classify_button = tk.Button(actions_card, text="🏷️ CLASIFICAR NOTICIAS",
+                                          command=self.start_classification,
+                                          bg='#8b5cf6', fg='white',
+                                          font=('Segoe UI', 10, 'bold'), relief='flat',
+                                          padx=20, pady=10, cursor='hand2')
+            self.classify_button.pack(fill=tk.X, pady=5)
+        else:
+            tk.Label(actions_card, text="⚠️ Clasificador no disponible\n(instala dependencias LangChain)",
+                    bg=self.colors['card_bg'], fg=self.colors['warning'],
+                    font=('Segoe UI', 8)).pack(fill=tk.X, pady=5)
 
         # === ESTADÍSTICAS (Derecha) ===
         stats_card = tk.LabelFrame(right_panel, text="Estadísticas en Vivo", bg=self.colors['card_bg'],
@@ -544,6 +602,111 @@ class RSSChinaGUI:
         self.errors_tree.configure(yscroll=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self.errors_tree.pack(fill=tk.BOTH, expand=True)
+    
+    def setup_classifications_tab(self):
+        """Configura la pestaña de Clasificaciones."""
+        # Toolbar
+        toolbar = tk.Frame(self.tab_classifications, bg=self.colors['bg'], pady=10)
+        toolbar.pack(fill=tk.X, padx=10)
+        
+        tk.Button(toolbar, text="🔄 Recargar", command=self.load_classifications,
+                 bg=self.colors['primary'], fg='white', relief='flat', padx=10).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(toolbar, text="📂 Exportar JSON", command=self.export_classifications_json,
+                 bg='white', relief='solid', borderwidth=1, padx=10).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(toolbar, text="📊 Exportar CSV", command=self.export_classifications_csv,
+                 bg='white', relief='solid', borderwidth=1, padx=10).pack(side=tk.LEFT, padx=5)
+        
+        # Búsqueda
+        tk.Label(toolbar, text="Buscar:", bg=self.colors['bg']).pack(side=tk.LEFT, padx=(20, 5))
+        self.classification_search_var = tk.StringVar()
+        entry_search = ttk.Entry(toolbar, textvariable=self.classification_search_var)
+        entry_search.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        entry_search.bind('<KeyRelease>', self.filter_classifications)
+        
+        self.classifications_count_label = tk.Label(toolbar, text="0 clasificaciones", bg=self.colors['bg'])
+        self.classifications_count_label.pack(side=tk.RIGHT, padx=10)
+        
+        # Contenedor principal con estadísticas y tabla
+        main_container = tk.Frame(self.tab_classifications, bg=self.colors['bg'])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Estadísticas de clasificación
+        stats_frame = tk.Frame(main_container, bg=self.colors['bg'])
+        stats_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Tarjetas de estadísticas
+        stats_card = tk.LabelFrame(stats_frame, text="Estadísticas de Clasificación",
+                                   bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
+                                   padx=15, pady=15)
+        stats_card.pack(fill=tk.X)
+        
+        self.classification_stats_labels = {}
+        stats_info = [
+            ('total', '📊 Total Artículos'),
+            ('classified', '✅ Clasificados'),
+            ('failed', '❌ Fallidos')
+        ]
+        
+        for i, (key, label) in enumerate(stats_info):
+            tk.Label(stats_card, text=label, bg=self.colors['card_bg']).grid(
+                row=0, column=i*2, sticky='w', padx=(0, 10), pady=5)
+            
+            val = tk.Label(stats_card, text="0", bg=self.colors['card_bg'],
+                          font=('Segoe UI', 12, 'bold'))
+            val.grid(row=0, column=i*2+1, sticky='w', padx=(0, 20), pady=5)
+            self.classification_stats_labels[key] = val
+        
+        # Distribución de temas e imágenes
+        dist_frame = tk.Frame(main_container, bg=self.colors['bg'])
+        dist_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Temas más frecuentes
+        temas_card = tk.LabelFrame(dist_frame, text="Temas Más Frecuentes",
+                                   bg=self.colors['card_bg'], font=('Segoe UI', 10, 'bold'),
+                                   padx=10, pady=10)
+        temas_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
+        self.temas_text = tk.Text(temas_card, height=4, font=('Segoe UI', 9),
+                                  bg='white', relief='flat', state='disabled')
+        self.temas_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Imagen de China más frecuente
+        imagen_card = tk.LabelFrame(dist_frame, text="Imagen de China",
+                                    bg=self.colors['card_bg'], font=('Segoe UI', 10, 'bold'),
+                                    padx=10, pady=10)
+        imagen_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        
+        self.imagen_text = tk.Text(imagen_card, height=4, font=('Segoe UI', 9),
+                                   bg='white', relief='flat', state='disabled')
+        self.imagen_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Tabla de clasificaciones
+        columns = ('medio', 'titulo', 'tema', 'imagen', 'resumen')
+        self.classifications_tree = ttk.Treeview(main_container, columns=columns, show='headings')
+        
+        self.classifications_tree.heading('medio', text='Medio')
+        self.classifications_tree.heading('titulo', text='Título')
+        self.classifications_tree.heading('tema', text='Tema')
+        self.classifications_tree.heading('imagen', text='Imagen de China')
+        self.classifications_tree.heading('resumen', text='Resumen')
+        
+        self.classifications_tree.column('medio', width=120)
+        self.classifications_tree.column('titulo', width=250)
+        self.classifications_tree.column('tema', width=150)
+        self.classifications_tree.column('imagen', width=120)
+        self.classifications_tree.column('resumen', width=350)
+        
+        # Scrollbars
+        sb_y = ttk.Scrollbar(main_container, orient=tk.VERTICAL, command=self.classifications_tree.yview)
+        sb_x = ttk.Scrollbar(main_container, orient=tk.HORIZONTAL, command=self.classifications_tree.xview)
+        self.classifications_tree.configure(yscroll=sb_y.set, xscroll=sb_x.set)
+        
+        sb_y.pack(side=tk.RIGHT, fill=tk.Y)
+        sb_x.pack(side=tk.BOTTOM, fill=tk.X)
+        self.classifications_tree.pack(fill=tk.BOTH, expand=True)
+
     
     def setup_logging(self):
         """Configura el sistema de logging."""
@@ -830,6 +993,8 @@ class RSSChinaGUI:
             self.load_results()
         elif "Artículos" in tab_name:
             self.load_full_articles()
+        elif "Clasificaciones" in tab_name:
+            self.load_classifications()
         elif "Reportes" in tab_name:
             self.load_reports()
 
