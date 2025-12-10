@@ -48,3 +48,14 @@ desktop.ini
 
 # Configuración local (si tienes configs personalizadas)
 config/local_*.json
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+secrets.json
+api_keys.json
+credentials.json
