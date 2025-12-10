@@ -1,219 +1,143 @@
 """
-Módulo almacenamiento: Guarda noticias en JSON Lines y CSV.
+Módulo almacenamiento: Guarda noticias en el CSV maestro centralizado.
+
+Este módulo ahora utiliza noticias_db para almacenamiento unificado.
 """
-import csv
-import json
 import logging
-from pathlib import Path
 from typing import List
+from pathlib import Path
 
 from parser import NewsItem
+from noticias_db import obtener_db, guardar_db, NoticiasDB
 
 logger = logging.getLogger(__name__)
 
 
-def load_existing_jsonl(output_path: str) -> List[dict]:
+def save_results(items: List[NewsItem], output_dir: str, base_name: str = 'output') -> dict:
     """
-    Carga noticias existentes desde un archivo JSONL.
+    Guarda resultados de RSS en el CSV maestro centralizado.
+    
+    Los artículos nuevos se añaden con estado='nuevo'.
+    Los artículos que ya existen se ignoran (deduplicación por URL).
     
     Args:
-        output_path: Ruta del archivo JSONL
+        items: Lista de NewsItem nuevos del RSS
+        output_dir: Directorio de salida (se usa para determinar ruta del CSV maestro)
+        base_name: Nombre base (ignorado, se usa siempre noticias_china.csv)
         
     Returns:
-        Lista de diccionarios con las noticias existentes
+        Diccionario con estadísticas: {'nuevos': int, 'duplicados': int, 'total': int}
     """
-    existing_items = []
+    # Ruta del CSV maestro
+    csv_path = f"{output_dir}/noticias_china.csv"
     
-    if not Path(output_path).exists():
-        return existing_items
+    # Obtener instancia de la DB
+    db = obtener_db(csv_path)
     
-    try:
-        with open(output_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        item = json.loads(line)
-                        existing_items.append(item)
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"Error parseando línea en {output_path}: {e}")
-                        continue
+    stats = {
+        'nuevos': 0,
+        'duplicados': 0,
+        'total': len(items)
+    }
+    
+    for item in items:
+        # Convertir NewsItem a diccionario
+        datos = {
+            'url': item.enlace,
+            'medio': item.nombre_del_medio,
+            'titular': item.titular,
+            'fecha': item.fecha or item.fecha_raw or '',
+            'descripcion': item.descripcion,
+            'estado': 'nuevo'
+        }
         
-        logger.info(f"Cargadas {len(existing_items)} noticias existentes de {output_path}")
-        return existing_items
-        
-    except Exception as e:
-        logger.error(f"Error leyendo archivo existente {output_path}: {e}")
-        return existing_items
+        # Intentar añadir (retorna False si ya existe)
+        if db.añadir_articulo(datos):
+            stats['nuevos'] += 1
+        else:
+            stats['duplicados'] += 1
+    
+    # Guardar cambios
+    if stats['nuevos'] > 0:
+        db.guardar()
+        logger.info(f"Guardados {stats['nuevos']} artículos nuevos en {csv_path}")
+    
+    if stats['duplicados'] > 0:
+        logger.info(f"Ignorados {stats['duplicados']} artículos duplicados")
+    
+    logger.info(f"Total procesados: {stats['total']} | Nuevos: {stats['nuevos']} | Duplicados: {stats['duplicados']}")
+    
+    return stats
 
 
-def save_jsonl(items: List[NewsItem], output_path: str) -> None:
+def obtener_articulos_por_estado(output_dir: str, estado: str) -> List[dict]:
     """
-    Guarda noticias en formato JSON Lines, añadiendo a las existentes sin duplicar.
+    Obtiene artículos filtrados por estado.
     
     Args:
-        items: Lista de NewsItem nuevos
-        output_path: Ruta del archivo de salida
+        output_dir: Directorio de datos
+        estado: Estado a filtrar ('nuevo', 'extraido', 'por_clasificar', 'clasificado', 'error')
+        
+    Returns:
+        Lista de diccionarios con los artículos
     """
-    try:
-        # Crear directorio si no existe
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    csv_path = f"{output_dir}/noticias_china.csv"
+    db = obtener_db(csv_path)
+    return db.obtener_por_estado(estado)
+
+
+def actualizar_estado_articulo(output_dir: str, url: str, estado: str, error_msg: str = '') -> bool:
+    """
+    Actualiza el estado de un artículo.
+    
+    Args:
+        output_dir: Directorio de datos
+        url: URL del artículo
+        estado: Nuevo estado
+        error_msg: Mensaje de error (si aplica)
         
-        # Cargar noticias existentes
-        existing_items = load_existing_jsonl(output_path)
+    Returns:
+        True si se actualizó correctamente
+    """
+    csv_path = f"{output_dir}/noticias_china.csv"
+    db = obtener_db(csv_path)
+    resultado = db.actualizar_estado(url, estado, error_msg)
+    if resultado:
+        db.guardar()
+    return resultado
+
+
+def obtener_estadisticas(output_dir: str) -> dict:
+    """
+    Obtiene estadísticas de la base de datos.
+    
+    Args:
+        output_dir: Directorio de datos
         
-        # Crear set de URLs existentes para deduplicación rápida
-        existing_urls = {item.get('enlace', '') for item in existing_items if item.get('enlace')}
-        
-        # Convertir nuevos items a dict
-        new_items = []
-        new_count = 0
-        for item in items:
-            item_dict = {
-                'nombre_del_medio': item.nombre_del_medio,
-                'rss_origen': item.rss_origen,
-                'titular': item.titular,
-                'enlace': item.enlace,
-                'descripcion': item.descripcion,
-                'fecha': item.fecha or item.fecha_raw
-            }
-            
-            # Solo añadir si no existe (deduplicar por URL)
-            if item.enlace and item.enlace not in existing_urls:
-                new_items.append(item_dict)
-                existing_urls.add(item.enlace)
-                new_count += 1
-            elif not item.enlace:
-                # Si no tiene URL, añadirlo de todas formas (raro pero posible)
-                new_items.append(item_dict)
-                new_count += 1
-        
-        # Combinar: existentes + nuevos
-        all_items = existing_items + new_items
-        
-        # Guardar todo
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for item_dict in all_items:
-                f.write(json.dumps(item_dict, ensure_ascii=False) + '\n')
-        
-        logger.info(f"Guardados {len(all_items)} ítems totales en {output_path} ({new_count} nuevos, {len(existing_items)} existentes)")
-        
-    except Exception as e:
-        logger.error(f"Error guardando JSONL en {output_path}: {e}")
-        raise
+    Returns:
+        Diccionario con conteo por estado y total
+    """
+    csv_path = f"{output_dir}/noticias_china.csv"
+    db = obtener_db(csv_path)
+    
+    stats = db.contar_por_estado()
+    stats['total'] = db.total()
+    
+    return stats
+
+
+# Mantener compatibilidad con código antiguo (deprecated)
+def load_existing_jsonl(output_path: str) -> List[dict]:
+    """DEPRECATED: Usar obtener_db().datos en su lugar."""
+    logger.warning("load_existing_jsonl está deprecado. Usar noticias_db.")
+    csv_path = str(Path(output_path).parent / "noticias_china.csv")
+    db = obtener_db(csv_path)
+    return db.datos
 
 
 def load_existing_csv(output_path: str) -> List[dict]:
-    """
-    Carga noticias existentes desde un archivo CSV.
-    
-    Args:
-        output_path: Ruta del archivo CSV
-        
-    Returns:
-        Lista de diccionarios con las noticias existentes
-    """
-    existing_items = []
-    
-    if not Path(output_path).exists():
-        return existing_items
-    
-    try:
-        with open(output_path, 'r', encoding='utf-8-sig', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                existing_items.append(row)
-        
-        logger.info(f"Cargadas {len(existing_items)} noticias existentes de {output_path}")
-        return existing_items
-        
-    except Exception as e:
-        logger.error(f"Error leyendo archivo CSV existente {output_path}: {e}")
-        return existing_items
-
-
-def save_csv(items: List[NewsItem], output_path: str) -> None:
-    """
-    Guarda noticias en formato CSV con UTF-8 BOM, añadiendo a las existentes sin duplicar.
-    
-    Args:
-        items: Lista de NewsItem nuevos
-        output_path: Ruta del archivo de salida
-    """
-    try:
-        # Crear directorio si no existe
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        
-        # Cargar noticias existentes
-        existing_items = load_existing_csv(output_path)
-        
-        # Crear set de URLs existentes para deduplicación rápida
-        existing_urls = {item.get('enlace', '') for item in existing_items if item.get('enlace')}
-        
-        # Convertir nuevos items a dict
-        new_items = []
-        new_count = 0
-        for item in items:
-            item_dict = {
-                'nombre_del_medio': item.nombre_del_medio,
-                'rss_origen': item.rss_origen,
-                'titular': item.titular,
-                'enlace': item.enlace,
-                'descripcion': item.descripcion,
-                'fecha': item.fecha or item.fecha_raw
-            }
-            
-            # Solo añadir si no existe (deduplicar por URL)
-            if item.enlace and item.enlace not in existing_urls:
-                new_items.append(item_dict)
-                existing_urls.add(item.enlace)
-                new_count += 1
-            elif not item.enlace:
-                # Si no tiene URL, añadirlo de todas formas (raro pero posible)
-                new_items.append(item_dict)
-                new_count += 1
-        
-        # Combinar: existentes + nuevos
-        all_items = existing_items + new_items
-        
-        # Guardar todo
-        # UTF-8 con BOM para compatibilidad con Excel en Windows
-        with open(output_path, 'w', encoding='utf-8-sig', newline='') as f:
-            fieldnames = [
-                'nombre_del_medio',
-                'rss_origen',
-                'titular',
-                'enlace',
-                'descripcion',
-                'fecha'
-            ]
-            
-            writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
-            writer.writeheader()
-            
-            for item_dict in all_items:
-                writer.writerow(item_dict)
-        
-        logger.info(f"Guardados {len(all_items)} ítems totales en {output_path} ({new_count} nuevos, {len(existing_items)} existentes)")
-        
-    except Exception as e:
-        logger.error(f"Error guardando CSV en {output_path}: {e}")
-        raise
-
-
-def save_results(items: List[NewsItem], output_dir: str, base_name: str = 'output') -> None:
-    """
-    Guarda resultados en ambos formatos (JSONL y CSV), añadiendo a los archivos existentes.
-    
-    Args:
-        items: Lista de NewsItem nuevos
-        output_dir: Directorio de salida
-        base_name: Nombre base para los archivos
-    """
-    jsonl_path = f"{output_dir}/{base_name}.jsonl"
-    csv_path = f"{output_dir}/{base_name}.csv"
-    
-    save_jsonl(items, jsonl_path)
-    save_csv(items, csv_path)
-    
-    logger.info(f"Resultados guardados en {output_dir}")
+    """DEPRECATED: Usar obtener_db().datos en su lugar."""
+    logger.warning("load_existing_csv está deprecado. Usar noticias_db.")
+    csv_path = str(Path(output_path).parent / "noticias_china.csv")
+    db = obtener_db(csv_path)
+    return db.datos

@@ -115,6 +115,7 @@ class RSSChinaGUI:
         self.log_level = tk.StringVar(value="INFO")
         self.search_var = tk.StringVar()
         self.article_search_var = tk.StringVar()
+        self.excel_file_path = tk.StringVar(value="data/noticias_historico.xlsx")
         
         # Estadísticas
         self.stats = {
@@ -157,6 +158,18 @@ class RSSChinaGUI:
             except ImportError as e:
                 logging.error(f"No se pudieron cargar métodos de clasificación: {e}", exc_info=True)
                 self.CLASIFICADOR_DISPONIBLE = False
+        
+        # Agregar métodos de Excel
+        try:
+            from gui_excel_methods import (
+                save_classifications_to_excel, show_excel_save_errors, browse_excel_file
+            )
+            self.save_classifications_to_excel = lambda: save_classifications_to_excel(self)
+            self.show_excel_save_errors = lambda: show_excel_save_errors(self)
+            self.browse_excel_file = lambda: browse_excel_file(self)
+            logging.info("Métodos de Excel cargados correctamente")
+        except ImportError as e:
+            logging.error(f"No se pudieron cargar métodos de Excel: {e}", exc_info=True)
         
         self.setup_styles()
         self.setup_ui()
@@ -546,10 +559,10 @@ class RSSChinaGUI:
         data = self.full_articles_data[idx]
         
         self.article_header.config(text=data.get('titular', ''))
-        self.article_meta.config(text=f"{data.get('nombre_del_medio')} | {data.get('fecha')}")
+        self.article_meta.config(text=f"{data.get('medio', '')} | {data.get('fecha', '')} | Estado: {data.get('estado', '')}")
         
         self.article_content.delete('1.0', tk.END)
-        self.article_content.insert('1.0', data.get('texto') or data.get('descripcion', ''))
+        self.article_content.insert('1.0', data.get('texto_completo') or data.get('descripcion', ''))
     
     def setup_reports_tab(self):
         """Configura la pestaña de Reportes."""
@@ -618,6 +631,13 @@ class RSSChinaGUI:
         tk.Button(toolbar, text="📊 Exportar CSV", command=self.export_classifications_csv,
                  bg='white', relief='solid', borderwidth=1, padx=10).pack(side=tk.LEFT, padx=5)
         
+        # Botón de guardar en Excel
+        self.save_excel_button = tk.Button(toolbar, text="💾 Guardar en Excel", 
+                                          command=self.save_classifications_to_excel,
+                                          bg='#10b981', fg='white', relief='flat', 
+                                          padx=10, font=('Segoe UI', 9, 'bold'))
+        self.save_excel_button.pack(side=tk.LEFT, padx=5)
+        
         # Búsqueda
         tk.Label(toolbar, text="Buscar:", bg=self.colors['bg']).pack(side=tk.LEFT, padx=(20, 5))
         self.classification_search_var = tk.StringVar()
@@ -627,6 +647,24 @@ class RSSChinaGUI:
         
         self.classifications_count_label = tk.Label(toolbar, text="0 clasificaciones", bg=self.colors['bg'])
         self.classifications_count_label.pack(side=tk.RIGHT, padx=10)
+        
+        # Configuración de Excel
+        excel_config_frame = tk.Frame(self.tab_classifications, bg=self.colors['bg'])
+        excel_config_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        tk.Label(excel_config_frame, text="📁 Archivo Excel:", 
+                bg=self.colors['bg'], font=('Segoe UI', 9)).pack(side=tk.LEFT, padx=(0, 5))
+        
+        ttk.Entry(excel_config_frame, textvariable=self.excel_file_path, 
+                 width=50).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(excel_config_frame, text="📂", command=self.browse_excel_file,
+                 bg='white', relief='solid', borderwidth=1, width=3).pack(side=tk.LEFT, padx=5)
+        
+        self.excel_status_label = tk.Label(excel_config_frame, text="No guardado aún",
+                                           bg=self.colors['bg'], fg=self.colors['text_light'],
+                                           font=('Segoe UI', 9, 'italic'))
+        self.excel_status_label.pack(side=tk.LEFT, padx=10)
         
         # Contenedor principal con estadísticas y tabla
         main_container = tk.Frame(self.tab_classifications, bg=self.colors['bg'])
@@ -847,10 +885,21 @@ class RSSChinaGUI:
                 self.root.after(0, lambda k=key, v=value: self.stats_labels[k].config(text=str(v)))
     
     def start_extraction(self):
-        """Inicia la extracción de texto completo."""
-        input_file = Path(self.output_dir.get()) / "output.jsonl"
-        if not input_file.exists():
-            messagebox.showerror("Error", "No se encontró output.jsonl. Ejecuta primero el proceso principal.")
+        """Inicia la extracción de texto completo desde el CSV maestro."""
+        from noticias_db import obtener_db
+        
+        csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
+        if not csv_path.exists():
+            messagebox.showerror("Error", "No se encontró el CSV maestro.\nEjecuta primero el proceso RSS.")
+            return
+        
+        # Verificar que hay artículos nuevos
+        db = obtener_db(str(csv_path))
+        pendientes = db.obtener_por_estado('nuevo')
+        
+        if not pendientes:
+            messagebox.showinfo("Info", f"No hay artículos nuevos para extraer.\n\nEstados actuales:\n" +
+                              "\n".join([f"- {k}: {v}" for k, v in db.contar_por_estado().items()]))
             return
         
         if self.is_running:
@@ -862,20 +911,20 @@ class RSSChinaGUI:
         self.status_label.config(text="● Extrayendo...", fg=self.colors['secondary'])
         
         # Ejecutar en thread separado
-        thread = threading.Thread(target=self.run_extraction, args=(str(input_file),), daemon=True)
+        thread = threading.Thread(target=self.run_extraction, args=(self.output_dir.get(),), daemon=True)
         thread.start()
     
-    def run_extraction(self, input_file):
-        """Ejecuta la extracción en un thread separado."""
+    def run_extraction(self, output_dir):
+        """Ejecuta la extracción en un thread separado desde el CSV maestro."""
         try:
             logger = logging.getLogger(__name__)
-            logger.info("Iniciando extracción de texto completo...")
+            logger.info("Iniciando extracción de texto completo desde CSV maestro...")
             
-            report = process_articles(input_file)
+            report = process_articles(output_dir=output_dir)
             
             logger.info(f"Extracción completada: {report.successful} exitosos, {report.failed_download + report.failed_extraction} fallos")
             self.root.after(0, lambda: messagebox.showinfo("Éxito", 
-                f"Extracción completada\n{report.successful} artículos procesados"))
+                f"Extracción completada\n{report.successful} artículos procesados\n{report.failed_download + report.failed_extraction} fallos"))
             
         except Exception as e:
             logger.error(f"Error en extracción: {e}", exc_info=True)
@@ -887,17 +936,20 @@ class RSSChinaGUI:
                                                                 fg=self.colors['text_light']))
     
     def load_results(self):
-        """Carga los resultados desde el archivo JSONL."""
-        jsonl_path = Path(self.output_dir.get()) / "output.jsonl"
-        if not jsonl_path.exists():
+        """Carga los resultados desde el CSV maestro."""
+        from noticias_db import obtener_db
+        
+        csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
+        if not csv_path.exists():
             return
         
         try:
-            self.results_data = []
-            with open(jsonl_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        self.results_data.append(json.loads(line))
+            db = obtener_db(str(csv_path))
+            self.results_data = db.datos  # Todos los artículos
+            
+            # Actualizar estadísticas por estado
+            stats = db.contar_por_estado()
+            logging.info(f"CSV maestro cargado: {db.total()} artículos | Estados: {stats}")
             
             self.filter_results()
         except Exception as e:
@@ -914,38 +966,41 @@ class RSSChinaGUI:
         
         for item in self.results_data:
             if search_term:
+                # Buscar en columnas del CSV maestro
                 if (search_term in item.get('titular', '').lower() or
-                    search_term in item.get('nombre_del_medio', '').lower()):
+                    search_term in item.get('medio', '').lower() or
+                    search_term in item.get('estado', '').lower()):
                     filtered.append(item)
             else:
                 filtered.append(item)
         
-        # Insertar en tabla
+        # Insertar en tabla (columnas del CSV maestro)
         for item in filtered:
             self.results_tree.insert('', 'end', values=(
-                item.get('nombre_del_medio', ''),
+                item.get('medio', ''),
                 item.get('titular', ''),
                 item.get('fecha', ''),
-                item.get('enlace', '')
+                item.get('url', '')
             ))
         
         self.results_count_label.config(text=f"{len(filtered)} resultados")
     
     def load_full_articles(self):
-        """Carga los artículos completos desde el archivo JSONL."""
-        articles_path = Path(self.output_dir.get()) / "articles_full.jsonl"
-        if not articles_path.exists():
-            articles_path = Path("data") / "articles_full.jsonl"
+        """Carga los artículos con texto completo desde el CSV maestro."""
+        from noticias_db import obtener_db
         
-        if not articles_path.exists():
+        csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
+        if not csv_path.exists():
             return
         
         try:
+            db = obtener_db(str(csv_path))
+            
+            # Obtener artículos que tienen texto (extraídos o clasificados)
             self.full_articles_data = []
-            with open(articles_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        self.full_articles_data.append(json.loads(line))
+            for article in db.datos:
+                if article.get('texto_completo') or article.get('estado') in ['extraido', 'clasificado']:
+                    self.full_articles_data.append(article)
             
             # Limpiar lista
             for item in self.articles_list.get_children():

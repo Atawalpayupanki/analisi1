@@ -1,6 +1,9 @@
 """
 Métodos de clasificación para la GUI.
 Este archivo contiene los métodos que se agregarán a la clase RSSChinaGUI.
+
+Ahora usa el CSV maestro centralizado para leer artículos pendientes
+y actualizar su estado tras la clasificación.
 """
 
 def start_classification(self):
@@ -9,14 +12,25 @@ def start_classification(self):
     from tkinter import messagebox
     import os
     import threading
+    from noticias_db import obtener_db
     
     if not hasattr(self, 'CLASIFICADOR_DISPONIBLE') or not self.CLASIFICADOR_DISPONIBLE:
         messagebox.showerror("Error", "El módulo de clasificación no está disponible.\\nInstala las dependencias: pip install langchain langchain-groq python-dotenv")
         return
     
-    articles_path = Path(self.output_dir.get()) / "articles_full.jsonl"
-    if not articles_path.exists():
-        messagebox.showerror("Error", "No se encontraron artículos para clasificar.\\nEjecuta primero la extracción de texto completo.")
+    # Verificar que existe el CSV maestro
+    csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
+    if not csv_path.exists():
+        messagebox.showerror("Error", "No se encontró el CSV maestro.\\nEjecuta primero el proceso RSS para crear la base de datos.")
+        return
+    
+    # Verificar artículos pendientes
+    db = obtener_db(str(csv_path))
+    pendientes = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar')
+    
+    if not pendientes:
+        messagebox.showinfo("Info", "No hay artículos pendientes de clasificar.\\n\\nEstados actuales:\\n" + 
+                           "\\n".join([f"- {k}: {v}" for k, v in db.contar_por_estado().items()]))
         return
     
     if self.is_running:
@@ -32,90 +46,85 @@ def start_classification(self):
         self.classify_button.config(state='disabled')
     self.status_label.config(text="● Clasificando...", fg='#8b5cf6')
     
-    self.classification_stats = {'total': 0, 'classified': 0, 'failed': 0, 'temas': {}, 'imagenes': {}}
-    thread = threading.Thread(target=self.run_classification, args=(str(articles_path),), daemon=True)
+    self.classification_stats = {'total': len(pendientes), 'classified': 0, 'failed': 0, 'temas': {}, 'imagenes': {}}
+    thread = threading.Thread(target=self.run_classification, args=(str(csv_path),), daemon=True)
     thread.start()
 
 
-def run_classification(self, input_file):
+def run_classification(self, csv_path):
     """Ejecuta la clasificación en un thread separado."""
-    import json
     import logging
-    import csv
-    from pathlib import Path
     from tkinter import messagebox
     from clasificador_langchain import clasificar_noticia_con_failover
+    from noticias_db import obtener_db
     
     try:
         logger = logging.getLogger(__name__)
         logger.info("Iniciando clasificación de noticias...")
         
-        articles = []
-        with open(input_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip():
-                    articles.append(json.loads(line))
+        # Obtener artículos pendientes del CSV maestro
+        db = obtener_db(csv_path)
+        articles = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar')
         
         total = len(articles)
         self.classification_stats['total'] = total
-        logger.info(f"Clasificando {total} artículos...")
+        logger.info(f"Clasificando {total} artículos pendientes...")
         
-        classified_results = []
+        classified_count = 0
         
         for i, article in enumerate(articles, 1):
             if not self.is_running:
                 break
             
+            url = article.get('url', '')
+            if not url:
+                continue
+            
             try:
                 datos = {
-                    "medio": article.get('nombre_del_medio', 'Desconocido'),
+                    "medio": article.get('medio', 'Desconocido'),
                     "fecha": article.get('fecha', ''),
                     "titulo": article.get('titular', ''),
                     "descripcion": article.get('descripcion', ''),
-                    "texto_completo": article.get('texto', article.get('descripcion', '')),
-                    "enlace": article.get('enlace', '')
+                    "texto_completo": article.get('texto_completo', article.get('descripcion', '')),
+                    "enlace": url
                 }
                 
                 resultado = clasificar_noticia_con_failover(datos)
-                resultado['nombre_del_medio'] = datos['medio']
-                resultado['enlace'] = datos['enlace']
-                classified_results.append(resultado)
                 
+                # Actualizar en la DB
+                db.actualizar_articulo(url, {
+                    'tema': resultado.get('tema', ''),
+                    'imagen_de_china': resultado.get('imagen_de_china', ''),
+                    'resumen': resultado.get('resumen_dos_frases', ''),
+                    'estado': 'clasificado'
+                })
+                
+                classified_count += 1
                 self.classification_stats['classified'] += 1
+                
                 tema = resultado.get('tema', 'Desconocido')
                 imagen = resultado.get('imagen_de_china', 'Desconocido')
                 self.classification_stats['temas'][tema] = self.classification_stats['temas'].get(tema, 0) + 1
                 self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
+                
                 logger.info(f"Clasificado {i}/{total}: {datos['titulo'][:50]}... -> {tema}")
                 
             except Exception as e:
                 logger.error(f"Error clasificando artículo {i}: {e}")
                 self.classification_stats['failed'] += 1
+                # Marcar como error
+                db.actualizar_estado(url, 'error', str(e))
         
-        if classified_results:
-            output_dir = Path(self.output_dir.get())
-            output_dir.mkdir(parents=True, exist_ok=True)
-            
-            jsonl_path = output_dir / "articles_classified.jsonl"
-            with open(jsonl_path, 'w', encoding='utf-8') as f:
-                for result in classified_results:
-                    f.write(json.dumps(result, ensure_ascii=False) + '\\n')
-            
-            csv_path = output_dir / "articles_classified.csv"
-            with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-                if classified_results:
-                    fieldnames = list(classified_results[0].keys())
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    for result in classified_results:
-                        writer.writerow(result)
-            
-            logger.info(f"Guardados {len(classified_results)} artículos clasificados")
+        # Guardar todos los cambios
+        db.guardar()
         
         logger.info("=== Clasificación completada ===")
-        self.root.after(0, lambda: messagebox.showinfo("Éxito", f"Clasificación completada\\n{self.classification_stats['classified']} artículos clasificados\\n{self.classification_stats['failed']} fallos"))
+        self.root.after(0, lambda: messagebox.showinfo("Éxito", 
+            f"Clasificación completada\\n{self.classification_stats['classified']} artículos clasificados\\n{self.classification_stats['failed']} fallos"))
         
     except Exception as e:
+        import traceback
         logger.error(f"Error en clasificación: {e}", exc_info=True)
         self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     finally:
@@ -126,42 +135,28 @@ def run_classification(self, input_file):
 
 
 def load_classifications(self):
-    """Carga las clasificaciones desde el archivo."""
-    import csv
+    """Carga las clasificaciones desde el CSV maestro."""
     import logging
     from pathlib import Path
+    from noticias_db import obtener_db
     
-    # Intentar cargar desde CSV primero
-    classified_path = Path(self.output_dir.get()) / "articles_classified.csv"
-    if not classified_path.exists():
-        classified_path = Path("data") / "articles_classified.csv"
-    
-    # Si no existe CSV, intentar JSONL
-    if not classified_path.exists():
-        classified_path = Path(self.output_dir.get()) / "articles_classified.jsonl"
-        if not classified_path.exists():
-            classified_path = Path("data") / "articles_classified.jsonl"
-    
-    if not classified_path.exists():
+    csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
+    if not csv_path.exists():
         return
     
     try:
-        self.classified_data = []
+        db = obtener_db(str(csv_path))
         
-        # Cargar según la extensión del archivo
-        if classified_path.suffix == '.csv':
-            with open(classified_path, 'r', encoding='utf-8-sig') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    self.classified_data.append(row)
-        else:  # JSONL
-            import json
-            with open(classified_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        self.classified_data.append(json.loads(line))
+        # Cargar todos los clasificados
+        self.classified_data = db.obtener_por_estado('clasificado')
         
-        self.classification_stats = {'total': len(self.classified_data), 'classified': len(self.classified_data), 'failed': 0, 'temas': {}, 'imagenes': {}}
+        self.classification_stats = {
+            'total': db.total(),
+            'classified': len(self.classified_data),
+            'failed': len(db.obtener_por_estado('error')),
+            'temas': {},
+            'imagenes': {}
+        }
         
         for item in self.classified_data:
             tema = item.get('tema', 'Desconocido')
@@ -186,15 +181,24 @@ def filter_classifications(self, event=None):
     
     for item in self.classified_data:
         if search_term:
-            if (search_term in item.get('titulo', '').lower() or search_term in item.get('medio', '').lower() or search_term in item.get('tema', '').lower() or search_term in item.get('imagen_de_china', '').lower()):
+            if (search_term in item.get('titular', '').lower() or 
+                search_term in item.get('medio', '').lower() or 
+                search_term in item.get('tema', '').lower() or 
+                search_term in item.get('imagen_de_china', '').lower()):
                 filtered.append(item)
         else:
             filtered.append(item)
     
     for item in filtered:
-        resumen = item.get('resumen_dos_frases', '')
+        resumen = item.get('resumen', '')
         resumen_short = resumen[:100] + '...' if len(resumen) > 100 else resumen
-        self.classifications_tree.insert('', 'end', values=(item.get('medio', ''), item.get('titulo', ''), item.get('tema', ''), item.get('imagen_de_china', ''), resumen_short))
+        self.classifications_tree.insert('', 'end', values=(
+            item.get('medio', ''), 
+            item.get('titular', ''), 
+            item.get('tema', ''), 
+            item.get('imagen_de_china', ''), 
+            resumen_short
+        ))
     
     self.classifications_count_label.config(text=f"{len(filtered)} clasificaciones")
 

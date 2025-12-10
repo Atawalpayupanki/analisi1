@@ -1,16 +1,16 @@
 {
-  "start_time": "2025-12-07T15:53:21",
-  "end_time": "2025-12-07T15:53:40",
-  "duration_seconds": 19.04102849960327,
-  "total_articles": 60,
-  "successful": 60,
+  "start_time": "2025-12-10T20:05:57",
+  "end_time": "2025-12-10T20:06:09",
+  "duration_seconds": 11.497071981430054,
+  "total_articles": 40,
+  "successful": 40,
   "failed_download": 0,
   "failed_extraction": 0,
   "no_content": 0,
   "blocked": 0,
   "extraction_methods": {
-    "custom_scraper": 17,
-    "bs4_fallback": 35,
-    "rss_summary_fallback": 8
+    "custom_scraper": 10,
+    "bs4_fallback": 29,
+    "rss_summary_fallback": 1
   }
 }

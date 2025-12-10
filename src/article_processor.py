@@ -1,11 +1,13 @@
 """
 Módulo orquestador para el procesamiento de artículos.
 Coordina la descarga, extracción y limpieza.
+
+Ahora usa el CSV maestro centralizado para leer artículos pendientes
+y actualizar su estado tras el procesamiento.
 """
 
 import logging
 import json
-import csv
 import time
 from pathlib import Path
 from dataclasses import dataclass, asdict, field
@@ -19,6 +21,7 @@ try:
     from src.article_cleaner import clean_article_text
     from src.article_enricher import detect_language
     from src.custom_scrapers import scrape_custom
+    from src.noticias_db import obtener_db, guardar_db
 
 except ImportError:
     from article_downloader import download_article_html
@@ -26,6 +29,7 @@ except ImportError:
     from article_cleaner import clean_article_text
     from article_enricher import detect_language
     from custom_scrapers import scrape_custom
+    from noticias_db import obtener_db, guardar_db
 
 
 logger = logging.getLogger(__name__)
@@ -73,10 +77,10 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
     """
     Procesa un único artículo: descarga -> extrae -> limpia.
     """
-    url = news_item.get('enlace', '')
+    url = news_item.get('enlace', news_item.get('url', ''))
     
     result = ArticleResult(
-        nombre_del_medio=news_item.get('nombre_del_medio', ''),
+        nombre_del_medio=news_item.get('nombre_del_medio', news_item.get('medio', '')),
         enlace=url,
         titular=news_item.get('titular', ''),
         fecha=news_item.get('fecha', ''),
@@ -187,70 +191,81 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
     return result
 
 
-def save_results(results: List[ArticleResult], output_dir: str, base_name: str = "articles_full"):
-    """Guarda los resultados en JSONL y CSV."""
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+def save_results_to_db(results: List[ArticleResult], output_dir: str):
+    """
+    Actualiza el CSV maestro con los resultados de extracción.
     
-    # Guardar JSONL
-    jsonl_path = output_path / f"{base_name}.jsonl"
-    with open(jsonl_path, 'w', encoding='utf-8') as f:
-        for res in results:
-            f.write(json.dumps(asdict(res), ensure_ascii=False) + '\n')
+    Args:
+        results: Lista de ArticleResult procesados
+        output_dir: Directorio de datos
+    """
+    csv_path = f"{output_dir}/noticias_china.csv"
+    db = obtener_db(csv_path)
+    
+    for result in results:
+        if not result.enlace:
+            continue
             
-    # Guardar CSV
-    csv_path = output_path / f"{base_name}.csv"
-    with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-        if results:
-            # Obtener campos de la dataclass
-            fieldnames = [field.name for field in list(results[0].__dataclass_fields__.values())]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for res in results:
-                writer.writerow(asdict(res))
-                
-    # Guardar fallidos
-    failed = [res for res in results if res.scrape_status != 'ok']
-    if failed:
-        failed_path = output_path / "failed_extractions.jsonl"
-        with open(failed_path, 'w', encoding='utf-8') as f:
-            for res in failed:
-                fail_data = {
-                    'url': res.enlace,
-                    'medio': res.nombre_del_medio,
-                    'status': res.scrape_status,
-                    'error': res.error_message,
-                    'timestamp': time.strftime("%Y-%m-%dT%H:%M:%S")
-                }
-                f.write(json.dumps(fail_data, ensure_ascii=False) + '\n')
+        # Determinar estado basado en resultado
+        if result.scrape_status == 'ok':
+            nuevo_estado = 'extraido'
+            error_msg = ''
+        else:
+            nuevo_estado = 'error'
+            error_msg = f"{result.scrape_status}: {result.error_message}"
+        
+        # Actualizar en la DB
+        db.actualizar_articulo(result.enlace, {
+            'texto_completo': result.texto,
+            'estado': nuevo_estado,
+            'error_msg': error_msg
+        })
+    
+    # Guardar cambios
+    db.guardar()
+    logger.info(f"Actualizados {len(results)} artículos en CSV maestro")
+
 
 def process_articles(
-    input_file: str, 
+    input_file: str = None, 
     config: Optional[dict] = None,
-    max_articles: Optional[int] = None
+    max_articles: Optional[int] = None,
+    output_dir: str = "data"
 ) -> ProcessingReport:
     """
-    Procesa una lista de artículos desde un archivo JSONL.
+    Procesa artículos pendientes desde el CSV maestro.
+    
+    Lee artículos con estado='nuevo' y los procesa para extraer texto.
+    Actualiza el estado a 'extraido' o 'error' según resultado.
+    
+    Args:
+        input_file: DEPRECATED - ahora se lee del CSV maestro
+        config: Configuración opcional
+        max_articles: Límite de artículos a procesar
+        output_dir: Directorio de datos
+        
+    Returns:
+        ProcessingReport con estadísticas
     """
     start_time = time.time()
     start_time_str = time.strftime("%Y-%m-%dT%H:%M:%S")
     
-    # Cargar artículos
-    articles_data = []
-    try:
-        with open(input_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip():
-                    articles_data.append(json.loads(line))
-    except FileNotFoundError:
-        logger.error(f"Archivo no encontrado: {input_file}")
+    # Cargar artículos pendientes del CSV maestro
+    csv_path = f"{output_dir}/noticias_china.csv"
+    db = obtener_db(csv_path)
+    
+    # Obtener artículos con estado='nuevo'
+    articles_data = db.obtener_por_estado('nuevo')
+    
+    if not articles_data:
+        logger.info("No hay artículos nuevos para procesar")
         return ProcessingReport(start_time=start_time_str)
         
     if max_articles:
         articles_data = articles_data[:max_articles]
         
     total = len(articles_data)
-    logger.info(f"Iniciando procesamiento de {total} artículos")
+    logger.info(f"Iniciando procesamiento de {total} artículos nuevos")
     
     concurrency = 5
     if config and 'processing' in config:
@@ -288,12 +303,8 @@ def process_articles(
                 logger.error(f"Excepción en procesamiento: {e}")
                 report.failed_extraction += 1
                 
-    # Guardar resultados
-    output_dir = "data"
-    if config and 'output' in config:
-        output_dir = str(Path(config['output'].get('jsonl_path', 'data/articles_full.jsonl')).parent)
-        
-    save_results(results, output_dir)
+    # Actualizar CSV maestro con resultados
+    save_results_to_db(results, output_dir)
     
     # Finalizar reporte
     report.end_time = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -305,3 +316,10 @@ def process_articles(
         f.write(json.dumps(asdict(report), indent=2))
         
     return report
+
+
+# Mantener compatibilidad - ahora redirige a la DB
+def save_results(results: List[ArticleResult], output_dir: str, base_name: str = "articles_full"):
+    """DEPRECATED: Usa save_results_to_db en su lugar."""
+    logger.warning("save_results está deprecado. Usando save_results_to_db.")
+    save_results_to_db(results, output_dir)

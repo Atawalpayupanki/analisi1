@@ -1,3 +1,4 @@
+
 # Especificación Técnica: Módulo de Extracción de Texto Completo de Artículos
 
 ## 1. Visión General
