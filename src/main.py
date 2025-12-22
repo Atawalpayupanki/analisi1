@@ -144,14 +144,20 @@ async def main_async(args) -> None:
     logger.info("Parseando feeds...")
     all_items: List[NewsItem] = []
     
-    for url, nombre, content in tqdm(download_results, desc="Parseando"):
+    for feed, content in tqdm(download_results, desc="Parseando"):
         if content:
-            items = parse_feed(content, url, nombre)
+            items = parse_feed(
+                content, 
+                feed['url'], 
+                feed.get('nombre', 'Desconocido'),
+                procedencia=feed.get('procedencia', 'Occidental'),
+                idioma=feed.get('idioma', 'es')
+            )
             all_items.extend(items)
             stats['feeds_ok'] += 1
         else:
             stats['feeds_error'] += 1
-            logger.warning(f"Feed sin contenido: {url}")
+            logger.warning(f"Feed sin contenido: {feed['url']}")
     
     stats['items_total'] = len(all_items)
     logger.info(f"Total de ítems parseados: {stats['items_total']}")
@@ -234,14 +240,20 @@ def main_sync(args) -> None:
     logger.info("Parseando feeds...")
     all_items: List[NewsItem] = []
     
-    for url, nombre, content in tqdm(download_results, desc="Parseando"):
+    for feed, content in tqdm(download_results, desc="Parseando"):
         if content:
-            items = parse_feed(content, url, nombre)
+            items = parse_feed(
+                content, 
+                feed['url'], 
+                feed.get('nombre', 'Desconocido'),
+                procedencia=feed.get('procedencia', 'Occidental'),
+                idioma=feed.get('idioma', 'es')
+            )
             all_items.extend(items)
             stats['feeds_ok'] += 1
         else:
             stats['feeds_error'] += 1
-            logger.warning(f"Feed sin contenido: {url}")
+            logger.warning(f"Feed sin contenido: {feed['url']}")
     
     stats['items_total'] = len(all_items)
     logger.info(f"Total de ítems parseados: {stats['items_total']}")

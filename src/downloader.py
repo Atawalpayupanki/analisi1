@@ -130,7 +130,7 @@ async def download_feeds_async(
         timeout: Timeout en segundos
         
     Returns:
-        Lista de tuplas (url, nombre_medio, contenido_xml)
+        Lista de tuplas (feed_dict, contenido_xml)
     """
     # Agrupar por dominio para rate limiting
     domain_feeds: Dict[str, List[Dict[str, str]]] = {}
@@ -149,7 +149,7 @@ async def download_feeds_async(
             
             for feed in domain_feed_list:
                 url, content = await download_feed_async(session, feed['url'], timeout)
-                results.append((url, feed['nombre'], content))
+                results.append((feed, content))
                 
                 # Rate limiting: pequeña pausa entre peticiones al mismo dominio
                 if len(domain_feed_list) > 1:
@@ -170,14 +170,14 @@ def download_feeds_sync(
         timeout: Timeout en segundos
         
     Returns:
-        Lista de tuplas (url, nombre_medio, contenido_xml)
+        Lista de tuplas (feed_dict, contenido_xml)
     """
     results = []
     domain_last_request: Dict[str, float] = {}
     
     for feed in feeds:
         url = feed['url']
-        nombre = feed['nombre']
+        nombre = feed.get('nombre', 'Desconocido')
         domain = urlparse(url).netloc
         
         # Rate limiting
@@ -188,10 +188,10 @@ def download_feeds_sync(
         
         try:
             content = download_feed(url, timeout)
-            results.append((url, nombre, content))
+            results.append((feed, content))
         except Exception as e:
             logger.error(f"Error final descargando {url}: {e}")
-            results.append((url, nombre, None))
+            results.append((feed, None))
         
         domain_last_request[domain] = time.time()
     

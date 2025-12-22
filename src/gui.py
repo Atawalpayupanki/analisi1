@@ -42,7 +42,7 @@ import asyncio
 from typing import Optional, List, Dict, Any
 
 # Importar módulos del proyecto
-from feeds_list import load_feeds
+from feeds_list import load_feeds, load_feeds_zh
 from downloader import download_feeds_async, download_feeds_sync
 from parser import parse_feed, NewsItem
 from filtro_china import load_keywords, filter_china_news
@@ -109,6 +109,7 @@ class RSSChinaGUI:
         
         # Variables de configuración
         self.config_file = tk.StringVar(value="config/feeds.json")
+        self.config_file_zh = tk.StringVar(value="config/rss_feeds_zh.json")
         self.keywords_file = tk.StringVar(value="config/keywords.json")
         self.output_dir = tk.StringVar(value="data")
         self.use_async = tk.BooleanVar(value=False)
@@ -383,6 +384,26 @@ class RSSChinaGUI:
             tk.Label(actions_card, text="⚠️ Clasificador no disponible\n(instala dependencias LangChain)",
                     bg=self.colors['card_bg'], fg=self.colors['warning'],
                     font=('Segoe UI', 8)).pack(fill=tk.X, pady=5)
+        
+        ttk.Separator(actions_card, orient='horizontal').pack(fill='x', pady=10)
+        
+        # Botón de visualizador de datos
+        self.visualizer_button = tk.Button(actions_card, text="📊 VISUALIZADOR DE DATOS",
+                                          command=self.open_visualizer,
+                                          bg='#ec4899', fg='white',
+                                          font=('Segoe UI', 10, 'bold'), relief='flat',
+                                          padx=20, pady=10, cursor='hand2')
+        self.visualizer_button.pack(fill=tk.X, pady=5)
+        
+        ttk.Separator(actions_card, orient='horizontal').pack(fill='x', pady=10)
+        
+        # Botón de procesar medios chinos
+        self.process_zh_button = tk.Button(actions_card, text="🇨🇳 PROCESAR MEDIOS CHINOS",
+                                          command=self.start_process_zh,
+                                          bg='#dc2626', fg='white',
+                                          font=('Segoe UI', 10, 'bold'), relief='flat',
+                                          padx=20, pady=10, cursor='hand2')
+        self.process_zh_button.pack(fill=tk.X, pady=5)
 
         # === ESTADÍSTICAS (Derecha) ===
         stats_card = tk.LabelFrame(right_panel, text="Estadísticas en Vivo", bg=self.colors['card_bg'],
@@ -495,6 +516,17 @@ class RSSChinaGUI:
 
     def setup_full_articles_tab(self):
         """Configura la pestaña de Artículos Completos."""
+        # Toolbar
+        toolbar = tk.Frame(self.tab_articles, bg=self.colors['bg'], pady=10)
+        toolbar.pack(fill=tk.X, padx=10)
+        
+        tk.Button(toolbar, text="🔄 Recargar", command=self.load_full_articles,
+                 bg=self.colors['primary'], fg='white', relief='flat', padx=10).pack(side=tk.LEFT, padx=5)
+        
+        # Contador de artículos
+        self.articles_count_label = tk.Label(toolbar, text="0 artículos", bg=self.colors['bg'])
+        self.articles_count_label.pack(side=tk.RIGHT, padx=10)
+        
         # Split container
         paned = tk.PanedWindow(self.tab_articles, orient=tk.HORIZONTAL, bg=self.colors['bg'], sashwidth=5)
         paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -566,6 +598,13 @@ class RSSChinaGUI:
     
     def setup_reports_tab(self):
         """Configura la pestaña de Reportes."""
+        # Toolbar
+        toolbar = tk.Frame(self.tab_reports, bg=self.colors['bg'], pady=10)
+        toolbar.pack(fill=tk.X, padx=10)
+        
+        tk.Button(toolbar, text="🔄 Recargar", command=self.load_reports,
+                 bg=self.colors['primary'], fg='white', relief='flat', padx=10).pack(side=tk.LEFT, padx=5)
+        
         # Estadísticas de extracción
         stats_card = tk.LabelFrame(self.tab_reports, text="Estadísticas de Extracción", 
                                   bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
@@ -721,20 +760,18 @@ class RSSChinaGUI:
         self.imagen_text.pack(fill=tk.BOTH, expand=True)
         
         # Tabla de clasificaciones
-        columns = ('medio', 'titulo', 'tema', 'imagen', 'resumen')
+        columns = ('medio', 'titulo', 'tema', 'imagen')
         self.classifications_tree = ttk.Treeview(main_container, columns=columns, show='headings')
         
         self.classifications_tree.heading('medio', text='Medio')
         self.classifications_tree.heading('titulo', text='Título')
         self.classifications_tree.heading('tema', text='Tema')
         self.classifications_tree.heading('imagen', text='Imagen de China')
-        self.classifications_tree.heading('resumen', text='Resumen')
         
-        self.classifications_tree.column('medio', width=120)
-        self.classifications_tree.column('titulo', width=250)
-        self.classifications_tree.column('tema', width=150)
-        self.classifications_tree.column('imagen', width=120)
-        self.classifications_tree.column('resumen', width=350)
+        self.classifications_tree.column('medio', width=150)
+        self.classifications_tree.column('titulo', width=400)
+        self.classifications_tree.column('tema', width=180)
+        self.classifications_tree.column('imagen', width=150)
         
         # Scrollbars
         sb_y = ttk.Scrollbar(main_container, orient=tk.VERTICAL, command=self.classifications_tree.yview)
@@ -834,16 +871,22 @@ class RSSChinaGUI:
             
             # 4. Parsear
             all_items = []
-            for url, nombre, content in download_results:
+            for feed, content in download_results:
                 if not self.is_running:
                     break
                 if content:
-                    items = parse_feed(content, url, nombre)
+                    items = parse_feed(
+                        content, 
+                        feed['url'], 
+                        feed.get('nombre', 'Desconocido'),
+                        procedencia=feed.get('procedencia', 'Occidental'),
+                        idioma=feed.get('idioma', 'es')
+                    )
                     all_items.extend(items)
                     self.stats['feeds_ok'] += 1
                 else:
                     self.stats['feeds_error'] += 1
-                    self.failed_feeds.append((nombre, url, "Sin contenido"))
+                    self.failed_feeds.append((feed.get('nombre', 'Desconocido'), feed['url'], "Sin contenido"))
                 self.update_stats()
             
             self.stats['items_total'] = len(all_items)
@@ -883,6 +926,115 @@ class RSSChinaGUI:
         for key, value in self.stats.items():
             if key in self.stats_labels:
                 self.root.after(0, lambda k=key, v=value: self.stats_labels[k].config(text=str(v)))
+    
+    def start_process_zh(self):
+        """Inicia el proceso de descarga de medios chinos (sin filtro de China)."""
+        if self.is_running:
+            messagebox.showwarning("Advertencia", "Ya hay un proceso en ejecución")
+            return
+        
+        self.is_running = True
+        self.process_zh_button.config(state=tk.DISABLED)
+        self.status_label.config(text="● Procesando medios chinos...", fg='#dc2626')
+        
+        # Resetear estadísticas
+        for key in self.stats:
+            self.stats[key] = 0
+            if key in self.stats_labels:
+                self.stats_labels[key].config(text="0")
+        
+        # Limpiar datos previos
+        self.failed_feeds = []
+        
+        # Ejecutar en thread separado
+        self.worker_thread = threading.Thread(target=self.run_process_zh, daemon=True)
+        self.worker_thread.start()
+    
+    def run_process_zh(self):
+        """Ejecuta el proceso de medios chinos en un thread separado.
+        
+        A diferencia de run_process, este NO aplica el filtro de China
+        ya que todas las noticias de medios chinos son relevantes.
+        """
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info("=== Iniciando proceso de medios chinos ===")
+            
+            # 1. Cargar feeds chinos
+            feeds = load_feeds_zh(self.config_file_zh.get())
+            self.stats['feeds_total'] = len(feeds)
+            self.update_stats()
+            
+            if not feeds:
+                logger.warning("No se encontraron feeds chinos. Verifica config/rss_feeds_zh.json")
+                self.root.after(0, lambda: messagebox.showwarning("Advertencia", 
+                    "No se encontraron feeds chinos.\nVerifica el archivo config/rss_feeds_zh.json"))
+                return
+            
+            # 2. Descargar feeds
+            if self.use_async.get():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                download_results = loop.run_until_complete(download_feeds_async(feeds))
+                loop.close()
+            else:
+                download_results = download_feeds_sync(feeds)
+            
+            # 3. Parsear (con procedencia='China' e idioma='zh')
+            all_items = []
+            for feed, content in download_results:
+                if not self.is_running:
+                    break
+                
+                if content:
+                    # Parsear con procedencia China e idioma zh
+                    items = parse_feed(
+                        content, 
+                        feed['url'], 
+                        feed.get('nombre', 'Desconocido'),
+                        procedencia=feed.get('procedencia', 'China'),
+                        idioma=feed.get('idioma', 'zh')
+                    )
+                    all_items.extend(items)
+                    self.stats['feeds_ok'] += 1
+                else:
+                    self.stats['feeds_error'] += 1
+                    self.failed_feeds.append((feed.get('nombre', 'Desconocido'), feed['url'], "Sin contenido"))
+                self.update_stats()
+            
+            self.stats['items_total'] = len(all_items)
+            # Para medios chinos, todas las noticias son relevantes (no filtramos)
+            self.stats['items_china'] = len(all_items)
+            self.update_stats()
+            
+            # 4. Ordenar por fecha (más recientes primero) y limitar a 100
+            # Ordenar por fecha descendente (None al final)
+            all_items.sort(key=lambda x: x.fecha or '', reverse=True)
+            all_items = all_items[:100]
+            logger.info(f"Limitado a las {len(all_items)} noticias más recientes")
+            
+            # 5. Deduplicar
+            unique_items = deduplicate(all_items)
+            self.stats['items_unique'] = len(unique_items)
+            self.update_stats()
+            
+            # 5. Guardar
+            if unique_items:
+                save_results(unique_items, self.output_dir.get())
+                logger.info(f"Guardados {len(unique_items)} resultados de medios chinos")
+            
+            logger.info("=== Proceso de medios chinos completado ===")
+            self.root.after(0, lambda: messagebox.showinfo("Éxito", 
+                f"Proceso de medios chinos completado\n{self.stats['items_unique']} noticias guardadas"))
+            
+        except Exception as e:
+            logger.error(f"Error en proceso de medios chinos: {e}", exc_info=True)
+            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        finally:
+            self.is_running = False
+            self.root.after(0, lambda: self.process_zh_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.status_label.config(text="● Listo", 
+                                                                fg=self.colors['text_light']))
     
     def start_extraction(self):
         """Inicia la extracción de texto completo desde el CSV maestro."""
@@ -1010,6 +1162,9 @@ class RSSChinaGUI:
             for i, article in enumerate(self.full_articles_data):
                 self.articles_list.insert('', 'end', text=str(i), 
                                          values=(article.get('titular', ''),))
+            
+            # Actualizar contador
+            self.articles_count_label.config(text=f"{len(self.full_articles_data)} artículos")
         except Exception as e:
             logging.error(f"Error cargando artículos: {e}")
 
@@ -1099,6 +1254,41 @@ class RSSChinaGUI:
         
         for name, url, reason in self.failed_feeds:
             text.insert(tk.END, f"Nombre: {name}\nURL: {url}\nError: {reason}\n{'-'*40}\n")
+    
+    def open_visualizer(self):
+        """Abre el visualizador de datos en el navegador."""
+        try:
+            # Verificar que existe el script del servidor
+            server_script = Path("abrir_visualizador.py")
+            if not server_script.exists():
+                messagebox.showerror("Error", 
+                    f"No se encuentra el archivo abrir_visualizador.py\n\n"
+                    f"Ruta esperada: {server_script.absolute()}")
+                return
+            
+            # Ejecutar el servidor en un proceso separado
+            import sys
+            python_exe = sys.executable
+            
+            messagebox.showinfo("Visualizador", 
+                "Se abrirá el visualizador en tu navegador.\n\n"
+                "Se iniciará un servidor local en http://localhost:8000\n\n"
+                "Para detener el servidor, cierra la ventana de terminal que se abrirá.")
+            
+            # Abrir en una nueva ventana de terminal
+            if sys.platform == "win32":
+                subprocess.Popen(['start', 'cmd', '/k', python_exe, str(server_script.absolute())], shell=True)
+            elif sys.platform == "darwin":
+                subprocess.Popen(['open', '-a', 'Terminal', python_exe, str(server_script.absolute())])
+            else:
+                subprocess.Popen(['x-terminal-emulator', '-e', python_exe, str(server_script.absolute())])
+            
+            logging.info(f"Servidor del visualizador iniciado")
+            
+        except Exception as e:
+            logging.error(f"Error abriendo visualizador: {e}", exc_info=True)
+            messagebox.showerror("Error", 
+                f"No se pudo abrir el visualizador:\n{str(e)}")
 
 
 def main():

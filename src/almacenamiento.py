@@ -45,6 +45,8 @@ def save_results(items: List[NewsItem], output_dir: str, base_name: str = 'outpu
         datos = {
             'url': item.enlace,
             'medio': item.nombre_del_medio,
+            'procedencia': getattr(item, 'procedencia', 'Occidental'),
+            'idioma': getattr(item, 'idioma', 'es'),
             'titular': item.titular,
             'fecha': item.fecha or item.fecha_raw or '',
             'descripcion': item.descripcion,

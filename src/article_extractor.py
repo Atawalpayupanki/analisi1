@@ -56,6 +56,7 @@ def extract_with_fallback_bs4(html: str, url: str) -> ExtractionResult:
                 'div.main-article-body'
             ],
             'larazon.es': [
+                'div.article-body--reporters',
                 'div.article-content',
                 'div.texto-noticia',
                 'div.article-body-content'

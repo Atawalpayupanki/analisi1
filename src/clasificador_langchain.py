@@ -5,7 +5,7 @@ Este módulo recibe noticias ya procesadas (con texto completo) y las clasifica
 usando un modelo LLM de Groq, devolviendo un JSON estructurado con:
 - tema
 - imagen_de_china
-- resumen_dos_frases
+
 
 Incluye failover automático entre dos API keys y validación estricta de JSON.
 """
@@ -52,11 +52,13 @@ CATEGORIAS_IMAGEN = [
     "Imperio de Xi Jinping"
 ]
 
-# Prompt exacto según especificaciones del usuario
+# Prompt actualizado para clasificación multilingüe
 PROMPT_TEMPLATE = """Instrucciones:
-Clasifica la siguiente noticia únicamente a partir del contenido proporcionado. No inventes información ni interpretes más allá de lo explícito. Tu tarea es asignar una etiqueta de "tema" y una de "imagen_de_china" siguiendo exactamente las listas cerradas de categorías que aparecen más abajo.
+Clasifica la siguiente noticia únicamente a partir del contenido proporcionado. No inventes información ni interpretes más allá de lo explícito. Evalúa la imagen de China tal como es presentada por el medio, teniendo en cuenta su procedencia y contexto editorial.
 
-Debes analizar la noticia con precisión, identificar el foco principal y decidir a qué categoría pertenece. Si un artículo toca múltiples áreas, elige únicamente la que sea dominante en el texto.
+Si el texto original no está en español, genera el resumen final en español igualmente, sin traducir literalmente, sino resumiendo el contenido en dos frases claras y concisas.
+
+Si un artículo toca múltiples áreas, elige únicamente la que sea dominante en el texto.
 
 Tu salida debe ser exclusivamente un objeto JSON válido. No añadas comentarios, explicaciones ni texto fuera del JSON.
 
@@ -97,6 +99,10 @@ Imperio de Xi Jinping
 Contenido a analizar:
 
 Medio: {medio}
+
+Procedencia del medio: {procedencia}
+
+Idioma del texto: {idioma}
 
 Fecha: {fecha}
 
@@ -148,7 +154,7 @@ def create_classification_prompt() -> PromptTemplate:
         PromptTemplate configurado con las variables necesarias
     """
     return PromptTemplate(
-        input_variables=["medio", "fecha", "titulo", "descripcion", "texto_completo"],
+        input_variables=["medio", "procedencia", "idioma", "fecha", "titulo", "descripcion", "texto_completo"],
         template=PROMPT_TEMPLATE
     )
 
@@ -223,7 +229,7 @@ def validate_and_repair_json(json_str: str) -> Dict[str, Any]:
             raise ValueError(f"JSON extraído sigue siendo inválido: {e}")
     
     # Validar campos requeridos
-    required_fields = ["tema", "imagen_de_china", "resumen_dos_frases"]
+    required_fields = ["tema", "imagen_de_china"]
     missing_fields = [field for field in required_fields if field not in data]
     
     if missing_fields:
@@ -256,10 +262,6 @@ def validate_and_repair_json(json_str: str) -> Dict[str, Any]:
         else:
             raise ValueError(f"Imagen '{imagen}' no válida. Debe ser uno de: {CATEGORIAS_IMAGEN}")
     
-    # Validar que el resumen no esté vacío
-    if not data["resumen_dos_frases"].strip():
-        raise ValueError("El resumen no puede estar vacío")
-    
     return data
 
 
@@ -278,6 +280,8 @@ def clasificar_noticia(
     Args:
         datos: Diccionario con las claves:
             - medio: Nombre del medio
+            - procedencia: Procedencia del medio (Occidental | China), opcional
+            - idioma: Idioma del texto (es, zh, etc.), opcional
             - fecha: Fecha de publicación
             - titulo: Título de la noticia
             - descripcion: Descripción breve
@@ -289,7 +293,7 @@ def clasificar_noticia(
         Diccionario con:
             - tema: Categoría temática
             - imagen_de_china: Categoría de imagen
-            - resumen_dos_frases: Resumen en dos frases
+            - resumen_dos_frases: Resumen en español (2 frases)
             - metadatos originales (medio, fecha, titulo, etc.)
             
     Raises:
@@ -316,9 +320,11 @@ def clasificar_noticia(
         llm = init_groq_model(api_key, model_name)
         chain = create_classification_chain(llm)
         
-        # Ejecutar clasificación
+        # Ejecutar clasificación (con procedencia e idioma opcionales)
         response = chain.invoke({
             "medio": datos["medio"],
+            "procedencia": datos.get("procedencia", "Occidental"),
+            "idioma": datos.get("idioma", "es"),
             "fecha": datos["fecha"],
             "titulo": datos["titulo"],
             "descripcion": datos["descripcion"],
@@ -335,12 +341,15 @@ def clasificar_noticia(
         resultado = {
             **clasificacion,
             "medio": datos["medio"],
+            "procedencia": datos.get("procedencia", "Occidental"),
+            "idioma": datos.get("idioma", "es"),
             "fecha": datos["fecha"],
             "titulo": datos["titulo"],
             "descripcion": datos["descripcion"],
             "enlace": datos.get("enlace", "")
         }
         
+        resumen = clasificacion.get('resumen_dos_frases', '')
         logger.info(f"Clasificación exitosa: tema={clasificacion['tema']}, imagen={clasificacion['imagen_de_china']}")
         return resultado
         
@@ -354,9 +363,9 @@ def clasificar_noticia_con_failover(
     model_name: str = "llama-3.3-70b-versatile"
 ) -> Dict[str, Any]:
     """
-    Clasifica una noticia con failover automático entre dos API keys.
+    Clasifica una noticia con failover automático entre múltiples API keys.
     
-    Intenta primero con GROQ_API_KEY, si falla cambia a GROQ_API_KEY_BACKUP.
+    Intenta con GROQ_API_KEY, luego GROQ_API_KEY_BACKUP, GROQ_API_KEY_3, etc.
     
     Args:
         datos: Diccionario con datos de la noticia
@@ -366,42 +375,41 @@ def clasificar_noticia_con_failover(
         Diccionario con la clasificación y metadatos
         
     Raises:
-        Exception: Si ambas API keys fallan
+        Exception: Si todas las API keys fallan
     """
-    primary_key = os.getenv("GROQ_API_KEY")
-    backup_key = os.getenv("GROQ_API_KEY_BACKUP")
+    # Lista de claves a intentar en orden de prioridad
+    keys_to_try = []
     
-    if not primary_key and not backup_key:
+    # Recolectar claves disponibles
+    env_vars = [
+        "GROQ_API_KEY", 
+        "GROQ_API_KEY_BACKUP", 
+        "GROQ_API_KEY_3", 
+        "GROQ_API_KEY_4"
+    ]
+    
+    for var_name in env_vars:
+        key = os.getenv(var_name)
+        if key:
+            keys_to_try.append((var_name, key))
+    
+    if not keys_to_try:
         raise ValueError(
-            "No se encontraron claves API. Define GROQ_API_KEY o GROQ_API_KEY_BACKUP "
-            "en el archivo .env"
+            "No se encontraron claves API. Define GROQ_API_KEY, GROQ_API_KEY_BACKUP, "
+            "GROQ_API_KEY_3 o GROQ_API_KEY_4 en el archivo .env"
         )
     
-    # Intentar con clave primaria
-    if primary_key:
+    last_exception = None
+    
+    for i, (var_name, api_key) in enumerate(keys_to_try):
         try:
-            logger.info("Intentando clasificación con API key primaria...")
-            return clasificar_noticia(datos, api_key=primary_key, model_name=model_name)
+            logger.info(f"Intentando clasificación con API key #{i+1} ({var_name})...")
+            return clasificar_noticia(datos, api_key=api_key, model_name=model_name)
         except Exception as e:
-            logger.warning(f"Falló API key primaria: {e}")
+            logger.warning(f"Falló API key #{i+1} ({var_name}): {e}")
+            last_exception = e
             
-            if not backup_key:
-                logger.error("No hay API key de respaldo disponible")
-                raise
-    
-    # Intentar con clave de respaldo
-    if backup_key:
-        try:
-            logger.info("Cambiando a API key de respaldo...")
-            return clasificar_noticia(datos, api_key=backup_key, model_name=model_name)
-        except Exception as e:
-            logger.error(f"Falló API key de respaldo: {e}")
-            raise Exception(
-                f"Ambas API keys fallaron. Primaria: {primary_key[:10] if primary_key else 'N/A'}..., "
-                f"Respaldo: {backup_key[:10] if backup_key else 'N/A'}..."
-            )
-    
-    raise Exception("No se pudo completar la clasificación con ninguna API key")
+    raise Exception(f"Todas las API keys ({len(keys_to_try)}) fallaron. Último error: {last_exception}")
 
 
 # ============================================================

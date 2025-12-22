@@ -15,22 +15,22 @@ def start_classification(self):
     from noticias_db import obtener_db
     
     if not hasattr(self, 'CLASIFICADOR_DISPONIBLE') or not self.CLASIFICADOR_DISPONIBLE:
-        messagebox.showerror("Error", "El módulo de clasificación no está disponible.\\nInstala las dependencias: pip install langchain langchain-groq python-dotenv")
+        messagebox.showerror("Error", "El módulo de clasificación no está disponible.\nInstala las dependencias: pip install langchain langchain-groq python-dotenv")
         return
     
     # Verificar que existe el CSV maestro
     csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
     if not csv_path.exists():
-        messagebox.showerror("Error", "No se encontró el CSV maestro.\\nEjecuta primero el proceso RSS para crear la base de datos.")
+        messagebox.showerror("Error", "No se encontró el CSV maestro.\nEjecuta primero el proceso RSS para crear la base de datos.")
         return
     
     # Verificar artículos pendientes
     db = obtener_db(str(csv_path))
-    pendientes = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar')
+    pendientes = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar') + db.obtener_por_estado('error')
     
     if not pendientes:
-        messagebox.showinfo("Info", "No hay artículos pendientes de clasificar.\\n\\nEstados actuales:\\n" + 
-                           "\\n".join([f"- {k}: {v}" for k, v in db.contar_por_estado().items()]))
+        messagebox.showinfo("Info", "No hay artículos pendientes de clasificar.\n\nEstados actuales:\n" + 
+                           "\n".join([f"- {k}: {v}" for k, v in db.contar_por_estado().items()]))
         return
     
     if self.is_running:
@@ -38,7 +38,7 @@ def start_classification(self):
         return
     
     if not os.getenv("GROQ_API_KEY") and not os.getenv("GROQ_API_KEY_BACKUP"):
-        messagebox.showerror("Error", "No se encontraron claves API de Groq.\\n\\nConfigura tus claves en el archivo .env")
+        messagebox.showerror("Error", "No se encontraron claves API de Groq.\n\nConfigura tus claves en el archivo .env")
         return
     
     self.is_running = True
@@ -64,7 +64,7 @@ def run_classification(self, csv_path):
         
         # Obtener artículos pendientes del CSV maestro
         db = obtener_db(csv_path)
-        articles = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar')
+        articles = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar') + db.obtener_por_estado('error')
         
         total = len(articles)
         self.classification_stats['total'] = total
@@ -83,6 +83,8 @@ def run_classification(self, csv_path):
             try:
                 datos = {
                     "medio": article.get('medio', 'Desconocido'),
+                    "procedencia": article.get('procedencia', 'Occidental'),
+                    "idioma": article.get('idioma', 'es'),
                     "fecha": article.get('fecha', ''),
                     "titulo": article.get('titular', ''),
                     "descripcion": article.get('descripcion', ''),
@@ -121,7 +123,7 @@ def run_classification(self, csv_path):
         
         logger.info("=== Clasificación completada ===")
         self.root.after(0, lambda: messagebox.showinfo("Éxito", 
-            f"Clasificación completada\\n{self.classification_stats['classified']} artículos clasificados\\n{self.classification_stats['failed']} fallos"))
+            f"Clasificación completada\n{self.classification_stats['classified']} artículos clasificados\n{self.classification_stats['failed']} fallos"))
         
     except Exception as e:
         import traceback
@@ -190,14 +192,11 @@ def filter_classifications(self, event=None):
             filtered.append(item)
     
     for item in filtered:
-        resumen = item.get('resumen', '')
-        resumen_short = resumen[:100] + '...' if len(resumen) > 100 else resumen
         self.classifications_tree.insert('', 'end', values=(
             item.get('medio', ''), 
             item.get('titular', ''), 
             item.get('tema', ''), 
-            item.get('imagen_de_china', ''), 
-            resumen_short
+            item.get('imagen_de_china', '')
         ))
     
     self.classifications_count_label.config(text=f"{len(filtered)} clasificaciones")
@@ -215,14 +214,14 @@ def update_classification_stats(self):
     self.temas_text.config(state='normal')
     self.temas_text.delete('1.0', tk.END)
     for tema, count in temas_sorted[:5]:
-        self.temas_text.insert(tk.END, f"{tema}: {count}\\n")
+        self.temas_text.insert(tk.END, f"{tema}: {count}\n")
     self.temas_text.config(state='disabled')
     
     imagenes_sorted = sorted(self.classification_stats['imagenes'].items(), key=lambda x: x[1], reverse=True)
     self.imagen_text.config(state='normal')
     self.imagen_text.delete('1.0', tk.END)
     for imagen, count in imagenes_sorted[:5]:
-        self.imagen_text.insert(tk.END, f"{imagen}: {count}\\n")
+        self.imagen_text.insert(tk.END, f"{imagen}: {count}\n")
     self.imagen_text.config(state='disabled')
 
 
@@ -241,7 +240,7 @@ def export_classifications_json(self):
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 for item in self.classified_data:
-                    f.write(json.dumps(item, ensure_ascii=False) + '\\n')
+                    f.write(json.dumps(item, ensure_ascii=False) + '\n')
             messagebox.showinfo("Éxito", f"Exportado a {filename}")
         except Exception as e:
             messagebox.showerror("Error", str(e))

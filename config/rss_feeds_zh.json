@@ -1,0 +1,42 @@
+{
+    "feeds": [
+        {
+            "nombre": "China Daily (Chinese)",
+            "urls": [
+                "http://feedmaker.kindle4rss.com/feeds/china.chinadaily.xml",
+                "http://feedmaker.kindle4rss.com/feeds/world.chinadaily.xml",
+                "http://feedmaker.kindle4rss.com/feeds/caijing.chinadaily.xml",
+                "http://feedmaker.kindle4rss.com/feeds/language-news.chinadaily.xml"
+            ]
+        },
+        {
+            "nombre": "Xinhua (Chinese)",
+            "urls": [
+                "http://www.xinhuanet.com/politics/news_politics.xml",
+                "http://www.xinhuanet.com/world/news_world.xml",
+                "http://www.xinhuanet.com/mil/news_mil.xml",
+                "http://www.xinhuanet.com/finance/news_finance.xml",
+                "http://www.xinhuanet.com/local/news_province.xml",
+                "http://www.xinhuanet.com/tw/news_tw.xml",
+                "http://www.xinhuanet.com/overseas/news_overseas.xml",
+                "http://www.xinhuanet.com/house/news_house.xml",
+                "http://www.xinhuanet.com/legal/news_legal.xml",
+                "http://www.xinhuanet.com/edu/news_edu.xml",
+                "http://www.xinhuanet.com/sports/news_sports.xml",
+                "http://www.xinhuanet.com/ent/news_ent.xml",
+                "http://www.xinhuanet.com/auto/news_auto.xml",
+                "http://www.xinhuanet.com/collection/news_collection.xml"
+            ]
+        },
+        {
+            "nombre": "People's Daily 人民日报 (RSSHub)",
+            "urls": [
+                "https://rsshub.app/people/paper/politics",
+                "https://rsshub.app/people/paper/world",
+                "https://rsshub.app/people/paper/finance",
+                "https://rsshub.app/people/paper/opinion",
+                "https://rsshub.app/people/paper/society"
+            ]
+        }
+    ]
+}

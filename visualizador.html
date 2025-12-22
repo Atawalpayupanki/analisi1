@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Visualizador de Datos - Análisis de Noticias</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --bg: #f0f4f8;
+            --card-bg: #ffffff;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: var(--primary);
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-light);
+            font-size: 1.1em;
+        }
+
+        .controls {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .controls h2 {
+            color: var(--text);
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+            font-size: 0.95em;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--text-light);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: var(--text);
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card .icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: var(--text-light);
+            font-size: 0.95em;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-card h3 {
+            color: var(--text);
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .data-table-container {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+
+        .data-table-container h3 {
+            color: var(--text);
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .tag-positiva {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-negativa {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tag-neutral {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .tag-amenaza {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: var(--text-light);
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 50px;
+            color: var(--text-light);
+            font-size: 1.1em;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Visualizador de Datos - Análisis de Noticias</h1>
+            <p>Herramienta interactiva para analizar noticias clasificadas sobre China</p>
+        </div>
+
+        <div class="controls">
+            <h2>🔍 Filtros</h2>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="filterTema">Tema</label>
+                    <select id="filterTema">
+                        <option value="">Todos los temas</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterImagen">Imagen de China</label>
+                    <select id="filterImagen">
+                        <option value="">Todas las imágenes</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterProcedencia">Procedencia</label>
+                    <select id="filterProcedencia">
+                        <option value="">Todas las procedencias</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterMedio">Medio</label>
+                    <select id="filterMedio">
+                        <option value="">Todos los medios</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterEstado">Estado</label>
+                    <select id="filterEstado">
+                        <option value="">Todos los estados</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="searchText">Buscar en titular</label>
+                    <input type="text" id="searchText" placeholder="Buscar...">
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="applyFilters()">🔍 Aplicar Filtros</button>
+                <button class="btn-secondary" onclick="resetFilters()">🔄 Limpiar Filtros</button>
+                <button class="btn-success" onclick="exportFilteredData()">💾 Exportar Datos Filtrados (CSV)</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon">📰</div>
+                <div class="value" id="totalNoticias">0</div>
+                <div class="label">Total Noticias</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🏷️</div>
+                <div class="value" id="totalTemas">0</div>
+                <div class="label">Temas Únicos</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📡</div>
+                <div class="value" id="totalMedios">0</div>
+                <div class="label">Medios</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">✅</div>
+                <div class="value" id="clasificadas">0</div>
+                <div class="label">Clasificadas</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>📊 Distribución por Tema</h3>
+                <div class="chart-container">
+                    <canvas id="temasChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>🖼️ Imagen de China</h3>
+                <div class="chart-container">
+                    <canvas id="imagenChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>🌍 Distribución por Procedencia</h3>
+                <div class="chart-container">
+                    <canvas id="procedenciaChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>📰 Distribución por Medio</h3>
+                <div class="chart-container">
+                    <canvas id="mediosChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-table-container">
+            <h3>📋 Datos Filtrados (<span id="filteredCount">0</span> resultados)</h3>
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Medio</th>
+                        <th>Titular</th>
+                        <th>Tema</th>
+                        <th>Imagen</th>
+                        <th>Procedencia</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="6" class="loading">Cargando datos...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let charts = {};
+
+        // Cargar datos del CSV
+        async function loadData() {
+            try {
+                // Intentar diferentes rutas
+                let csvText;
+                try {
+                    const response = await fetch('./data/noticias_china.csv');
+                    csvText = await response.text();
+                } catch (e) {
+                    // Intentar ruta alternativa
+                    const response = await fetch('data/noticias_china.csv');
+                    csvText = await response.text();
+                }
+
+                allData = parseCSV(csvText);
+                filteredData = [...allData];
+
+                populateFilters();
+                updateStats();
+                updateCharts();
+                updateTable();
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+                document.getElementById('tableBody').innerHTML =
+                    '<tr><td colspan="6" class="no-data">❌ Error cargando datos. Verifica que el archivo data/noticias_china.csv existe.<br>Error: ' + error.message + '</td></tr>';
+            }
+        }
+
+        // Parser CSV robusto (compatible con csv.QUOTE_ALL de Python)
+        function parseCSV(text) {
+            // Eliminar BOM si existe (utf-8-sig)
+            if (text.charCodeAt(0) === 0xFEFF) {
+                text = text.slice(1);
+            }
+
+            const lines = text.split(/\r?\n/);
+            if (lines.length < 2) {
+                console.error('CSV vacío o inválido');
+                return [];
+            }
+
+            // Parsear headers
+            const headers = parseCSVLine(lines[0]);
+            console.log('Headers encontrados:', headers);
+
+            const data = [];
+
+            // Parsear cada línea de datos
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue; // Saltar líneas vacías
+
+                const values = parseCSVLine(line);
+
+                // Solo procesar si tiene el número correcto de columnas
+                if (values.length >= headers.length) {
+                    const obj = {};
+                    headers.forEach((header, index) => {
+                        obj[header] = values[index] || '';
+                    });
+                    data.push(obj);
+                }
+            }
+
+            console.log(`Parseadas ${data.length} filas de datos`);
+            if (data.length > 0) {
+                console.log('Primera fila de ejemplo:', data[0]);
+            }
+
+            return data;
+        }
+
+        // Parser de línea CSV (maneja comillas dobles como Python csv.QUOTE_ALL)
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            let i = 0;
+
+            while (i < line.length) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        // Comilla doble escapada ("") -> una comilla literal
+                        current += '"';
+                        i += 2;
+                        continue;
+                    } else {
+                        // Toggle estado de comillas
+                        inQuotes = !inQuotes;
+                        i++;
+                        continue;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    // Fin de campo
+                    result.push(current);
+                    current = '';
+                    i++;
+                    continue;
+                } else {
+                    current += char;
+                    i++;
+                }
+            }
+
+            // Añadir último campo
+            result.push(current);
+
+            return result;
+        }
+
+        // Poblar filtros
+        function populateFilters() {
+            const temas = [...new Set(allData.map(d => d.tema).filter(Boolean))].sort();
+            const imagenes = [...new Set(allData.map(d => d.imagen_de_china).filter(Boolean))].sort();
+            const procedencias = [...new Set(allData.map(d => d.procedencia).filter(Boolean))].sort();
+            const medios = [...new Set(allData.map(d => d.medio).filter(Boolean))].sort();
+            const estados = [...new Set(allData.map(d => d.estado).filter(Boolean))].sort();
+
+            populateSelect('filterTema', temas);
+            populateSelect('filterImagen', imagenes);
+            populateSelect('filterProcedencia', procedencias);
+            populateSelect('filterMedio', medios);
+            populateSelect('filterEstado', estados);
+        }
+
+        function populateSelect(id, options) {
+            const select = document.getElementById(id);
+            const currentValue = select.value;
+
+            // Mantener la primera opción "Todos"
+            select.innerHTML = select.options[0].outerHTML;
+
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option;
+                opt.textContent = option;
+                select.appendChild(opt);
+            });
+
+            select.value = currentValue;
+        }
+
+        // Aplicar filtros
+        function applyFilters() {
+            const tema = document.getElementById('filterTema').value;
+            const imagen = document.getElementById('filterImagen').value;
+            const procedencia = document.getElementById('filterProcedencia').value;
+            const medio = document.getElementById('filterMedio').value;
+            const estado = document.getElementById('filterEstado').value;
+            const searchText = document.getElementById('searchText').value.toLowerCase();
+
+            filteredData = allData.filter(item => {
+                return (!tema || item.tema === tema) &&
+                    (!imagen || item.imagen_de_china === imagen) &&
+                    (!procedencia || item.procedencia === procedencia) &&
+                    (!medio || item.medio === medio) &&
+                    (!estado || item.estado === estado) &&
+                    (!searchText || item.titular.toLowerCase().includes(searchText));
+            });
+
+            updateStats();
+            updateCharts();
+            updateTable();
+        }
+
+        // Resetear filtros
+        function resetFilters() {
+            document.getElementById('filterTema').value = '';
+            document.getElementById('filterImagen').value = '';
+            document.getElementById('filterProcedencia').value = '';
+            document.getElementById('filterMedio').value = '';
+            document.getElementById('filterEstado').value = '';
+            document.getElementById('searchText').value = '';
+
+            filteredData = [...allData];
+            updateStats();
+            updateCharts();
+            updateTable();
+        }
+
+        // Actualizar estadísticas
+        function updateStats() {
+            document.getElementById('totalNoticias').textContent = filteredData.length;
+            document.getElementById('totalTemas').textContent =
+                new Set(filteredData.map(d => d.tema).filter(Boolean)).size;
+            document.getElementById('totalMedios').textContent =
+                new Set(filteredData.map(d => d.medio).filter(Boolean)).size;
+            document.getElementById('clasificadas').textContent =
+                filteredData.filter(d => d.estado === 'clasificado').length;
+        }
+
+        // Actualizar gráficos
+        function updateCharts() {
+            updateTemasChart();
+            updateImagenChart();
+            updateProcedenciaChart();
+            updateMediosChart();
+        }
+
+        function updateTemasChart() {
+            const temas = {};
+            filteredData.forEach(item => {
+                if (item.tema) {
+                    temas[item.tema] = (temas[item.tema] || 0) + 1;
+                }
+            });
+
+            const sortedTemas = Object.entries(temas)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            if (charts.temas) charts.temas.destroy();
+
+            const ctx = document.getElementById('temasChart').getContext('2d');
+            charts.temas = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedTemas.map(t => t[0]),
+                    datasets: [{
+                        label: 'Noticias',
+                        data: sortedTemas.map(t => t[1]),
+                        backgroundColor: 'rgba(37, 99, 235, 0.7)',
+                        borderColor: 'rgba(37, 99, 235, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function updateImagenChart() {
+            const imagenes = {};
+            filteredData.forEach(item => {
+                if (item.imagen_de_china) {
+                    imagenes[item.imagen_de_china] = (imagenes[item.imagen_de_china] || 0) + 1;
+                }
+            });
+
+            const colors = {
+                'Positiva': 'rgba(16, 185, 129, 0.7)',
+                'Negativa': 'rgba(239, 68, 68, 0.7)',
+                'Neutral': 'rgba(107, 114, 128, 0.7)',
+                'Amenaza': 'rgba(245, 158, 11, 0.7)'
+            };
+
+            if (charts.imagen) charts.imagen.destroy();
+
+            const ctx = document.getElementById('imagenChart').getContext('2d');
+            charts.imagen = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(imagenes),
+                    datasets: [{
+                        data: Object.values(imagenes),
+                        backgroundColor: Object.keys(imagenes).map(k => colors[k] || 'rgba(156, 163, 175, 0.7)'),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateProcedenciaChart() {
+            const procedencias = {};
+            filteredData.forEach(item => {
+                if (item.procedencia) {
+                    procedencias[item.procedencia] = (procedencias[item.procedencia] || 0) + 1;
+                }
+            });
+
+            if (charts.procedencia) charts.procedencia.destroy();
+
+            const ctx = document.getElementById('procedenciaChart').getContext('2d');
+            charts.procedencia = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(procedencias),
+                    datasets: [{
+                        data: Object.values(procedencias),
+                        backgroundColor: [
+                            'rgba(99, 102, 241, 0.7)',
+                            'rgba(236, 72, 153, 0.7)',
+                            'rgba(34, 197, 94, 0.7)'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateMediosChart() {
+            const medios = {};
+            filteredData.forEach(item => {
+                if (item.medio) {
+                    medios[item.medio] = (medios[item.medio] || 0) + 1;
+                }
+            });
+
+            const sortedMedios = Object.entries(medios)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            if (charts.medios) charts.medios.destroy();
+
+            const ctx = document.getElementById('mediosChart').getContext('2d');
+            charts.medios = new Chart(ctx, {
+                type: 'horizontalBar',
+                data: {
+                    labels: sortedMedios.map(m => m[0]),
+                    datasets: [{
+                        label: 'Noticias',
+                        data: sortedMedios.map(m => m[1]),
+                        backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                        borderColor: 'rgba(139, 92, 246, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Actualizar tabla
+        function updateTable() {
+            const tbody = document.getElementById('tableBody');
+            document.getElementById('filteredCount').textContent = filteredData.length;
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="no-data">No hay datos que coincidan con los filtros</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filteredData.slice(0, 100).map(item => {
+                const imagenClass = item.imagen_de_china ?
+                    `tag tag-${item.imagen_de_china.toLowerCase()}` : '';
+
+                return `
+                    <tr>
+                        <td>${item.fecha ? new Date(item.fecha).toLocaleDateString('es-ES') : '-'}</td>
+                        <td><strong>${item.medio || '-'}</strong></td>
+                        <td>${item.titular || '-'}</td>
+                        <td>${item.tema || '-'}</td>
+                        <td><span class="${imagenClass}">${item.imagen_de_china || '-'}</span></td>
+                        <td>${item.procedencia || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            if (filteredData.length > 100) {
+                tbody.innerHTML += `<tr><td colspan="6" class="no-data">Mostrando 100 de ${filteredData.length} resultados</td></tr>`;
+            }
+        }
+
+        // Exportar datos filtrados
+        function exportFilteredData() {
+            if (filteredData.length === 0) {
+                alert('No hay datos para exportar');
+                return;
+            }
+
+            const headers = ['fecha', 'medio', 'procedencia', 'titular', 'tema', 'imagen_de_china', 'url'];
+            const csv = [
+                headers.join(','),
+                ...filteredData.map(row =>
+                    headers.map(header => `"${(row[header] || '').replace(/"/g, '""')}"`).join(',')
+                )
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `noticias_filtradas_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        // Inicializar
+        loadData();
+    </script>
+</body>
+
+</html>

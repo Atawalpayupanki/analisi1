@@ -32,6 +32,8 @@ ESTADOS = {
 COLUMNAS = [
     'url',              # Clave única
     'medio',            # Nombre del periódico
+    'procedencia',      # Procedencia del medio: Occidental | China
+    'idioma',           # Idioma del texto: es, zh, etc.
     'titular',          # Título del artículo
     'fecha',            # Fecha de publicación
     'descripcion',      # Descripción corta del RSS
@@ -155,6 +157,8 @@ class NoticiasDB:
         nuevo.update({
             'url': url,
             'medio': datos.get('medio', datos.get('nombre_del_medio', '')),
+            'procedencia': datos.get('procedencia', 'Occidental'),
+            'idioma': datos.get('idioma', 'es'),
             'titular': datos.get('titular', datos.get('titulo', '')),
             'fecha': datos.get('fecha', ''),
             'descripcion': datos.get('descripcion', ''),
