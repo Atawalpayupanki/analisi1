@@ -57,10 +57,15 @@ def run_classification(self, csv_path):
     from tkinter import messagebox
     from clasificador_langchain import clasificar_noticia_con_failover
     from noticias_db import obtener_db
+    from activity_logger import (
+        log_classification_success, log_classification_failed,
+        log_process_started, log_process_completed, log_error
+    )
     
     try:
         logger = logging.getLogger(__name__)
         logger.info("Iniciando clasificación de noticias...")
+        log_process_started("Clasificación LLM")
         
         # Obtener artículos pendientes del CSV maestro
         db = obtener_db(csv_path)
@@ -110,16 +115,22 @@ def run_classification(self, csv_path):
                 self.classification_stats['temas'][tema] = self.classification_stats['temas'].get(tema, 0) + 1
                 self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
                 
+                self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
+                
                 logger.info(f"Clasificado {i}/{total}: {datos['titulo'][:50]}... -> {tema}")
+                log_classification_success(datos['titulo'], tema, imagen)
                 
             except Exception as e:
                 logger.error(f"Error clasificando artículo {i}: {e}")
                 self.classification_stats['failed'] += 1
+                log_classification_failed(datos.get('titulo', 'Sin título'), str(e))
                 # Marcar como error
                 db.actualizar_estado(url, 'error', str(e))
         
         # Guardar todos los cambios
         db.guardar()
+        
+        log_process_completed("Clasificación LLM", self.classification_stats)
         
         logger.info("=== Clasificación completada ===")
         self.root.after(0, lambda: messagebox.showinfo("Éxito", 
@@ -128,6 +139,7 @@ def run_classification(self, csv_path):
     except Exception as e:
         import traceback
         logger.error(f"Error en clasificación: {e}", exc_info=True)
+        log_error("Error en clasificación LLM", str(e))
         self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
     finally:
         self.is_running = False

@@ -1,0 +1,84 @@
+REGISTRO DE ARCHIVOS ELIMINADOS - 2025-12-22
+=============================================
+
+Este documento registra todos los archivos eliminados durante la limpieza
+del proyecto. Ninguno de estos archivos era necesario para el funcionamiento
+del programa principal.
+
+SCRIPTS DE VERIFICACIÓN (8 archivos)
+------------------------------------
+- check_elmundo.py             Script para verificar scraping de El Mundo
+- check_elmundo_classified.py  Verificar clasificación de artículos de El Mundo
+- check_excel.py               Verificar formato de archivos Excel
+- verify_excel.py              Otra verificación de exportación Excel
+- verify_excel_export.py       Verificación de export a Excel
+- verify_larazon.py            Verificar scraping de La Razón
+- verify_retry.py              Verificar sistema de reintentos
+- verify_rss_zh.py             Verificar feeds RSS chinos
+
+SCRIPTS DE MIGRACIÓN/UTILIDAD (6 archivos)
+------------------------------------------
+- migrar_datos.py              Migrar datos de formato antiguo (ya ejecutado)
+- csv_to_excel.py              Conversión CSV a Excel (integrado en GUI)
+- fix_excel_format.py          Arreglar formato Excel (fix puntual)
+- regenerar_excel.py           Regenerar archivo Excel (utility)
+- compare_articles.py          Comparar artículos (análisis puntual)
+- analizar_csv.py              Analizar CSV (análisis puntual)
+
+ARCHIVOS DE TEST (7 archivos)
+-----------------------------
+- test_clasificador.py         Test del clasificador LangChain
+- test_excel_export.py         Test de exportación a Excel
+- test_extraction.py           Test de extracción de artículos
+- test_feeds_metadata.py       Test de metadata de feeds
+- test_excel_export.xlsx       Archivo de salida de test
+- test_export.xlsx             Archivo de salida de test
+- test_output.xlsx             Archivo de salida de test
+
+CARPETA tests/ (4 archivos)
+---------------------------
+- tests/reproduce_issue.py               Reproducir bug específico
+- tests/test_custom_integration.py       Tests de integración scrapers
+- tests/test_rss_fallback.py             Test de fallback a RSS
+- tests/test_rss_fallback_placeholder.py Placeholder de test
+
+CARPETA docs/ (8 archivos)
+--------------------------
+- docs/CHECKLIST_IMPLEMENTACION.md       Checklist de implementación
+- docs/DIAGRAMA_VISUAL.md                Diagramas del sistema
+- docs/ESPECIFICACION_EXTRACTOR_ARTICULOS.md  Especificación técnica extractor
+- docs/ESTRATEGIA_FALLBACK.md            Estrategia de fallback
+- docs/INDICE.md                         Índice de documentación
+- docs/README_EXTRACTOR.md               Documentación del extractor
+- docs/RESUMEN_EJECUTIVO.md              Resumen ejecutivo del proyecto
+- docs/clasificador_langchain.md         Documentación de LangChain
+
+CARPETA examples/ (1 archivo)
+-----------------------------
+- examples/ejemplo_uso_extractor.py      Ejemplo de uso (código comentado)
+
+DOCUMENTACIÓN RAÍZ (4 archivos MD)
+----------------------------------
+- README.md                    README principal extenso
+- README_VISUALIZADOR.md       Documentación del visualizador
+- CLASIFICADOR_README.md       Documentación del clasificador
+- SETUP_COMPLETADO.md          Informe de setup completado
+
+SCRIPTS DE SETUP (2 archivos)
+-----------------------------
+- setup_env.ps1                Script PowerShell para configurar entorno
+- activar_venv.ps1             Script PowerShell para activar venv
+
+OTROS ARCHIVOS (1 archivo)
+--------------------------
+- data/extraction_report.json  Reporte de extracción puntual
+
+===========================================
+TOTAL: 41 archivos/carpetas eliminados
+===========================================
+
+ARCHIVOS CONSERVADOS
+--------------------
+Todos los archivos en src/, config/, data/ (excepto extraction_report.json),
+.env, requirements.txt, .gitignore, abrir_visualizador.py, visualizador.html,
+y las carpetas "scrap el mundo" y "scrap el pais" con sus scrapers.

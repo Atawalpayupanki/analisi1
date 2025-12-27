@@ -50,6 +50,14 @@ from deduplicador import deduplicate
 from almacenamiento import save_results
 from article_processor import process_articles
 
+# Importar logger de actividad
+from activity_logger import (
+    get_logger, log_feed_processed, log_feed_failed,
+    log_article_added, log_article_duplicate,
+    log_process_started, log_process_completed,
+    log_error
+)
+
 # Importar clasificador LangChain
 try:
     from clasificador_langchain import clasificar_noticia_con_failover
@@ -597,63 +605,103 @@ class RSSChinaGUI:
         self.article_content.insert('1.0', data.get('texto_completo') or data.get('descripcion', ''))
     
     def setup_reports_tab(self):
-        """Configura la pestaña de Reportes."""
-        # Toolbar
+        """Configura la pestaña de Reportes completa."""
+        # Toolbar superior
         toolbar = tk.Frame(self.tab_reports, bg=self.colors['bg'], pady=10)
         toolbar.pack(fill=tk.X, padx=10)
         
         tk.Button(toolbar, text="🔄 Recargar", command=self.load_reports,
                  bg=self.colors['primary'], fg='white', relief='flat', padx=10).pack(side=tk.LEFT, padx=5)
         
-        # Estadísticas de extracción
-        stats_card = tk.LabelFrame(self.tab_reports, text="Estadísticas de Extracción", 
-                                  bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
-                                  padx=15, pady=15)
-        stats_card.pack(fill=tk.X, padx=10, pady=10)
+        tk.Button(toolbar, text="🗑️ Limpiar Historial", command=self.clear_old_logs_ui,
+                 bg='white', relief='solid', borderwidth=1, padx=10).pack(side=tk.LEFT, padx=5)
+                 
+        tk.Button(toolbar, text="📂 Ver Logs", command=self.open_logs_dir,
+                 bg='white', relief='solid', borderwidth=1, padx=10).pack(side=tk.LEFT, padx=5)
+
+        # Contenedor principal
+        main_container = tk.Frame(self.tab_reports, bg=self.colors['bg'])
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10)
         
-        self.report_labels = {}
-        report_stats = [
-            ('total_articles', '📊 Total Artículos'),
-            ('successful', '✅ Exitosos'),
-            ('failed_download', '❌ Fallos Descarga'),
-            ('failed_extraction', '⚠️ Fallos Extracción'),
-            ('no_content', '📭 Sin Contenido'),
-            ('blocked', '🚫 Bloqueados')
+        # Panel superior: Estadísticas
+        stats_frame = tk.Frame(main_container, bg=self.colors['bg'])
+        stats_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 1. Stats de Sesión
+        session_card = tk.LabelFrame(stats_frame, text="Sesión Actual", 
+                                  bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
+                                  padx=15, pady=10)
+        session_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
+        self.session_labels = {}
+        session_stats = [
+            ('feeds_ok', '✅ Feeds OK'),
+            ('feeds_error', '❌ Feeds Error'),
+            ('articles_added', '📄 Artículos Nuevos'),
+            ('articles_duplicate', '♻️ Duplicados'),
+            ('classifications_success', '🧠 Clasif. OK'),
+            ('classifications_failed', '⚠️ Clasif. Fallo')
         ]
         
-        for i, (key, label) in enumerate(report_stats):
-            row = i // 3
-            col = (i % 3) * 2
-            
-            tk.Label(stats_card, text=label, bg=self.colors['card_bg']).grid(
-                row=row, column=col, sticky='w', padx=(0, 10), pady=5)
-            
-            val = tk.Label(stats_card, text="0", bg=self.colors['card_bg'], 
-                          font=('Segoe UI', 12, 'bold'))
-            val.grid(row=row, column=col+1, sticky='w', padx=(0, 20), pady=5)
-            self.report_labels[key] = val
+        for i, (key, label) in enumerate(session_stats):
+            row = i // 2
+            col = (i % 2) * 2
+            tk.Label(session_card, text=label, bg=self.colors['card_bg']).grid(
+                row=row, column=col, sticky='w', padx=(0, 10), pady=2)
+            val = tk.Label(session_card, text="0", bg=self.colors['card_bg'], font=('Segoe UI', 10, 'bold'))
+            val.grid(row=row, column=col+1, sticky='w', padx=(0, 20), pady=2)
+            self.session_labels[key] = val
+
+        # 2. Stats Históricas
+        history_card = tk.LabelFrame(stats_frame, text="Histórico Global", 
+                                  bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
+                                  padx=15, pady=10)
+        history_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
         
-        # Tabla de errores
-        errors_card = tk.LabelFrame(self.tab_reports, text="Errores de Extracción",
-                                   bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
-                                   padx=10, pady=10)
-        errors_card.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.history_labels = {}
+        history_stats = [
+            ('feeds_processed', '📡 Feeds Proc.'),
+            ('articles_added', '📚 Total Artículos'),
+            ('classifications_success', '🤖 Total Clasif.')
+        ]
         
-        columns = ('url', 'error', 'timestamp')
-        self.errors_tree = ttk.Treeview(errors_card, columns=columns, show='headings', height=10)
+        for i, (key, label) in enumerate(history_stats):
+            tk.Label(history_card, text=label, bg=self.colors['card_bg']).grid(
+                row=i, column=0, sticky='w', padx=(0, 10), pady=5)
+            val = tk.Label(history_card, text="0", bg=self.colors['card_bg'], font=('Segoe UI', 12, 'bold'))
+            val.grid(row=i, column=1, sticky='w', padx=(0, 20), pady=5)
+            self.history_labels[key] = val
         
-        self.errors_tree.heading('url', text='URL')
-        self.errors_tree.heading('error', text='Error')
-        self.errors_tree.heading('timestamp', text='Timestamp')
+        # Panel inferior: Tabla de logs
+        logs_card = tk.LabelFrame(main_container, text="Registro de Actividad Reciente",
+                                 bg=self.colors['card_bg'], font=('Segoe UI', 11, 'bold'),
+                                 padx=10, pady=10)
+        logs_card.pack(fill=tk.BOTH, expand=True)
         
-        self.errors_tree.column('url', width=400)
-        self.errors_tree.column('error', width=300)
-        self.errors_tree.column('timestamp', width=150)
+        columns = ('timestamp', 'tipo', 'mensaje')
+        self.activity_tree = ttk.Treeview(logs_card, columns=columns, show='headings')
         
-        sb = ttk.Scrollbar(errors_card, orient=tk.VERTICAL, command=self.errors_tree.yview)
-        self.errors_tree.configure(yscroll=sb.set)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.errors_tree.pack(fill=tk.BOTH, expand=True)
+        self.activity_tree.heading('timestamp', text='Hora')
+        self.activity_tree.heading('tipo', text='Tipo Evento')
+        self.activity_tree.heading('mensaje', text='Detalle')
+        
+        self.activity_tree.column('timestamp', width=150)
+        self.activity_tree.column('tipo', width=150)
+        self.activity_tree.column('mensaje', width=500)
+        
+        # Scrollbars
+        sb_y = ttk.Scrollbar(logs_card, orient=tk.VERTICAL, command=self.activity_tree.yview)
+        sb_x = ttk.Scrollbar(logs_card, orient=tk.HORIZONTAL, command=self.activity_tree.xview)
+        self.activity_tree.configure(yscroll=sb_y.set, xscroll=sb_x.set)
+        
+        sb_y.pack(side=tk.RIGHT, fill=tk.Y)
+        sb_x.pack(side=tk.BOTTOM, fill=tk.X)
+        self.activity_tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Tags para colorear filas
+        self.activity_tree.tag_configure('error', foreground='red')
+        self.activity_tree.tag_configure('success', foreground='green')
+        self.activity_tree.tag_configure('warning', foreground='#d97706')
     
     def setup_classifications_tab(self):
         """Configura la pestaña de Clasificaciones."""
@@ -851,6 +899,7 @@ class RSSChinaGUI:
         try:
             logger = logging.getLogger(__name__)
             logger.info("=== Iniciando proceso ===")
+            log_process_started("RSS Occidental")
             
             # 1. Cargar feeds
             feeds = load_feeds(self.config_file.get())
@@ -884,9 +933,11 @@ class RSSChinaGUI:
                     )
                     all_items.extend(items)
                     self.stats['feeds_ok'] += 1
+                    log_feed_processed(feed.get('nombre', 'Desconocido'), feed['url'], len(items))
                 else:
                     self.stats['feeds_error'] += 1
                     self.failed_feeds.append((feed.get('nombre', 'Desconocido'), feed['url'], "Sin contenido"))
+                    log_feed_failed(feed.get('nombre', 'Desconocido'), feed['url'], "Sin contenido")
                 self.update_stats()
             
             self.stats['items_total'] = len(all_items)
@@ -906,6 +957,23 @@ class RSSChinaGUI:
             if unique_items:
                 save_results(unique_items, self.output_dir.get())
                 logger.info(f"Guardados {len(unique_items)} resultados")
+                # Log artículos añadidos
+                for item in unique_items:
+                    log_article_added(item.titular, item.nombre_del_medio, item.enlace)
+            
+            # Log duplicados detectados
+            duplicates_count = len(china_items) - len(unique_items)
+            if duplicates_count > 0:
+                for i in range(duplicates_count):
+                    log_article_duplicate("Artículo duplicado", "Varios")
+            
+            log_process_completed("RSS Occidental", {
+                "feeds_ok": self.stats['feeds_ok'],
+                "feeds_error": self.stats['feeds_error'],
+                "articles_total": len(all_items),
+                "articles_china": len(china_items),
+                "articles_unique": len(unique_items)
+            })
             
             logger.info("=== Proceso completado ===")
             self.root.after(0, lambda: messagebox.showinfo("Éxito", 
@@ -913,6 +981,7 @@ class RSSChinaGUI:
             
         except Exception as e:
             logger.error(f"Error en proceso: {e}", exc_info=True)
+            log_error("Error en proceso RSS Occidental", str(e))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
             self.is_running = False
@@ -959,6 +1028,7 @@ class RSSChinaGUI:
         try:
             logger = logging.getLogger(__name__)
             logger.info("=== Iniciando proceso de medios chinos ===")
+            log_process_started("RSS China")
             
             # 1. Cargar feeds chinos
             feeds = load_feeds_zh(self.config_file_zh.get())
@@ -997,9 +1067,11 @@ class RSSChinaGUI:
                     )
                     all_items.extend(items)
                     self.stats['feeds_ok'] += 1
+                    log_feed_processed(feed.get('nombre', 'Desconocido'), feed['url'], len(items))
                 else:
                     self.stats['feeds_error'] += 1
                     self.failed_feeds.append((feed.get('nombre', 'Desconocido'), feed['url'], "Sin contenido"))
+                    log_feed_failed(feed.get('nombre', 'Desconocido'), feed['url'], "Sin contenido")
                 self.update_stats()
             
             self.stats['items_total'] = len(all_items)
@@ -1022,6 +1094,22 @@ class RSSChinaGUI:
             if unique_items:
                 save_results(unique_items, self.output_dir.get())
                 logger.info(f"Guardados {len(unique_items)} resultados de medios chinos")
+                # Log artículos añadidos
+                for item in unique_items:
+                    log_article_added(item.titular, item.nombre_del_medio, item.enlace)
+            
+            # Log duplicados detectados (estimado)
+            duplicates_count = len(all_items[:100]) - len(unique_items)
+            if duplicates_count > 0:
+                for i in range(duplicates_count):
+                    log_article_duplicate("Artículo chino duplicado", "Medios Chinos")
+            
+            log_process_completed("RSS China", {
+                "feeds_ok": self.stats['feeds_ok'],
+                "feeds_error": self.stats['feeds_error'],
+                "articles_total": len(all_items),
+                "articles_kept": len(unique_items)
+            })
             
             logger.info("=== Proceso de medios chinos completado ===")
             self.root.after(0, lambda: messagebox.showinfo("Éxito", 
@@ -1029,6 +1117,7 @@ class RSSChinaGUI:
             
         except Exception as e:
             logger.error(f"Error en proceso de medios chinos: {e}", exc_info=True)
+            log_error("Error en proceso RSS China", str(e))
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
             self.is_running = False
@@ -1169,32 +1258,67 @@ class RSSChinaGUI:
             logging.error(f"Error cargando artículos: {e}")
 
     def load_reports(self):
-        """Carga reportes y errores."""
-        # Cargar extraction_report.json
-        try:
-            report_path = Path("extraction_report.json")
-            if report_path.exists():
-                with open(report_path, 'r') as f:
-                    data = json.load(f)
-                    for key, label in self.report_labels.items():
-                        label.config(text=str(data.get(key, 0)))
-        except Exception: pass
+        """Carga reportes desde ActivityLogger."""
+        logger_inst = get_logger()
         
-        # Cargar errores
+        # 1. Cargar estadísticas de sesión
+        session = logger_inst.get_session_stats()
+        for key, label in self.session_labels.items():
+            if key in session:
+                val = session[key]
+                label.config(text=str(val))
+                # Color coding para errores
+                if 'error' in key or 'failed' in key:
+                    label.config(fg='red' if val > 0 else 'black')
+                elif 'ok' in key or 'success' in key:
+                    label.config(fg='green' if val > 0 else 'black')
+
+        # 2. Cargar historial
+        history = logger_inst.get_historical_stats()
+        for key, label in self.history_labels.items():
+            if key in history:
+                label.config(text=str(history[key]))
+        
+        # 3. Cargar tabla de actividad
+        for item in self.activity_tree.get_children():
+            self.activity_tree.delete(item)
+            
+        events = logger_inst.get_recent_events(limit=100)
+        for event in events:
+            # Determinar tag para color
+            tag = ''
+            etype = event['event_type']
+            if 'error' in etype or 'failed' in etype:
+                tag = 'error'
+            elif 'success' in etype or 'processed' in etype or 'added' in etype:
+                tag = 'success'
+            elif 'duplicate' in etype or 'warning' in etype:
+                tag = 'warning'
+                
+            # Formatear timestamp
+            ts = event['timestamp'].split('T')[-1].split('.')[0] # Solo hora
+            
+            self.activity_tree.insert('', 'end', values=(
+                ts,
+                etype,
+                event['message']
+            ), tags=(tag,))
+
+    def clear_old_logs_ui(self):
+        """Limpia logs antiguos."""
+        if messagebox.askyesno("Confirmar", "¿Borrar historial de más de 30 días?"):
+            get_logger().clear_old_logs(30)
+            self.load_reports()
+            messagebox.showinfo("Éxito", "Logs antiguos eliminados")
+
+    def open_logs_dir(self):
+        """Abre la carpeta de logs."""
         try:
-            error_path = Path("failed_extractions.jsonl")
-            if error_path.exists():
-                for item in self.errors_tree.get_children():
-                    self.errors_tree.delete(item)
-                with open(error_path, 'r') as f:
-                    for line in f:
-                        data = json.loads(line)
-                        self.errors_tree.insert('', 'end', values=(
-                            data.get('url', ''),
-                            data.get('error', ''),
-                            data.get('timestamp', '')
-                        ))
-        except Exception: pass
+            logs_path = get_logger().logs_dir
+            if sys.platform == "win32": os.startfile(logs_path)
+            elif sys.platform == "darwin": subprocess.run(["open", logs_path])
+            else: subprocess.run(["xdg-open", logs_path])
+        except Exception as e: messagebox.showerror("Error", str(e))
 
     def on_tab_changed(self, event):
         """Maneja el cambio de pestañas."""
