@@ -1,0 +1,103 @@
+{
+    "xinhuanet_feeds": {
+        "description": "Feeds RSS de Xinhuanet (新华网) generados por RSSHub",
+        "base_url": "http://localhost:1200",
+        "categories": {
+            "国内_nacional": {
+                "name": "Noticias Nacionales de China",
+                "url": "/xinhua/china",
+                "full_url": "http://localhost:1200/xinhua/china",
+                "description": "Noticias sobre política, sociedad y eventos nacionales de China"
+            },
+            "国际_internacional": {
+                "name": "Noticias Internacionales",
+                "url": "/xinhua/world",
+                "full_url": "http://localhost:1200/xinhua/world",
+                "description": "Noticias internacionales desde la perspectiva china"
+            },
+            "财经_finanzas": {
+                "name": "Finanzas y Economía",
+                "url": "/xinhua/finance",
+                "full_url": "http://localhost:1200/xinhua/finance",
+                "description": "Noticias económicas, mercados, empresas y finanzas"
+            },
+            "科技_tecnologia": {
+                "name": "Ciencia y Tecnología",
+                "url": "/xinhua/tech",
+                "full_url": "http://localhost:1200/xinhua/tech",
+                "description": "Avances científicos, innovación y tecnología"
+            },
+            "体育_deportes": {
+                "name": "Deportes",
+                "url": "/xinhua/sports",
+                "full_url": "http://localhost:1200/xinhua/sports",
+                "description": "Noticias deportivas nacionales e internacionales"
+            },
+            "娱乐_entretenimiento": {
+                "name": "Entretenimiento",
+                "url": "/xinhua/ent",
+                "full_url": "http://localhost:1200/xinhua/ent",
+                "description": "Cine, música, celebridades y cultura popular"
+            },
+            "军事_militar": {
+                "name": "Noticias Militares",
+                "url": "/xinhua/mil",
+                "full_url": "http://localhost:1200/xinhua/mil",
+                "description": "Defensa, fuerzas armadas y asuntos militares"
+            },
+            "港澳_hongkong_macao": {
+                "name": "Hong Kong y Macao",
+                "url": "/xinhua/gangao",
+                "full_url": "http://localhost:1200/xinhua/gangao",
+                "description": "Noticias de las regiones administrativas especiales"
+            },
+            "台湾_taiwan": {
+                "name": "Taiwán",
+                "url": "/xinhua/tw",
+                "full_url": "http://localhost:1200/xinhua/tw",
+                "description": "Noticias relacionadas con Taiwán"
+            },
+            "latest_ultimas": {
+                "name": "Últimas Noticias",
+                "url": "/xinhua/latest",
+                "full_url": "http://localhost:1200/xinhua/latest",
+                "description": "Las noticias más recientes de todas las categorías"
+            },
+            "english_ingles": {
+                "name": "Xinhua en Inglés",
+                "url": "/xinhua/english",
+                "full_url": "http://localhost:1200/xinhua/english",
+                "description": "Noticias de Xinhua en idioma inglés"
+            }
+        },
+        "usage_notes": {
+            "local_access": "Usa http://localhost:1200 cuando accedas desde la misma computadora",
+            "network_access": "Reemplaza 'localhost' con la IP de tu PC (ej: 192.168.1.100) para acceder desde otros dispositivos en la red",
+            "update_frequency": "Los feeds se actualizan cuando tu lector RSS los consulta. RSSHub cachea los resultados por 5 minutos por defecto",
+            "troubleshooting": "Si un feed no funciona, verifica que RSSHub esté ejecutándose y que la URL sea accesible en tu navegador"
+        }
+    },
+    "alternative_sources": {
+        "description": "Fuentes alternativas si RSSHub no funciona",
+        "options": [
+            {
+                "name": "Feed43",
+                "url": "https://feed43.com",
+                "type": "Servicio web",
+                "description": "Convierte cualquier página web en RSS mediante reglas personalizadas"
+            },
+            {
+                "name": "RSS Bridge",
+                "url": "https://github.com/RSS-Bridge/rss-bridge",
+                "type": "Auto-hospedado",
+                "description": "Alternativa a RSSHub con diferentes routers"
+            },
+            {
+                "name": "Custom Scraper",
+                "url": "Ver custom_scraper.py",
+                "type": "Script Python",
+                "description": "Scraper personalizado para control total"
+            }
+        ]
+    }
+}

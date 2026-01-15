@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def validate_url(url: str) -> bool:
     """
-    Valida que una URL tenga esquema http o https.
+    Valida que una URL tenga esquema http, https o file.
     
     Args:
         url: URL a validar
@@ -21,6 +21,9 @@ def validate_url(url: str) -> bool:
     """
     try:
         parsed = urlparse(url)
+        # Aceptar http, https y file (para feeds RSS locales)
+        if parsed.scheme == 'file':
+            return bool(parsed.path)  # file:// debe tener una ruta
         return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
     except Exception as e:
         logger.warning(f"Error validando URL '{url}': {e}")

@@ -1,0 +1,25 @@
+/* ============================================
+   🎨 App Component Styles
+   ============================================ */
+
+/* Título de sección */
+.card h2 {
+  color: var(--text);
+  font-size: 1.5em;
+  margin-bottom: 0;
+}
+
+.card h3 {
+  color: var(--text);
+  font-size: 1.3em;
+  margin-bottom: 0;
+}
+
+/* Chart container placeholder */
+.chart-container {
+  position: relative;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

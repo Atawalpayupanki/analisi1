@@ -39,8 +39,6 @@
                 "https://www.abc.es/rss/feeds/abc_ultima.xml",
                 "https://www.abc.es/rss/feeds/abc_internacional.xml",
                 "https://www.abc.es/rss/feeds/abc_economia.xml",
-                "https://www.abc.es/rss/feeds/abc_espana.xml",
-                "https://www.abc.es/rss/feeds/abc_sociedad.xml",
                 "https://www.abc.es/rss/feeds/abc_cultura.xml",
                 "https://www.abc.es/rss/feeds/abc_tecnologia.xml",
                 "https://www.abc.es/rss/feeds/abc_opinion.xml",
@@ -66,7 +64,6 @@
         {
             "nombre": "La Razón",
             "urls": [
-                "https://www.larazon.es/rss/portada.xml",
                 "https://www.larazon.es/rss/internacional.xml",
                 "https://www.larazon.es/rss/economia.xml",
                 "https://www.larazon.es/rss/espana.xml",

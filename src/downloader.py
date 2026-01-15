@@ -4,7 +4,8 @@ Módulo downloader: Descarga feeds RSS con reintentos y manejo de errores.
 import logging
 import time
 from typing import Optional, List, Tuple, Dict
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
+from pathlib import Path
 
 import requests
 import aiohttp
@@ -25,6 +26,42 @@ class DownloadError(Exception):
     pass
 
 
+def read_local_file(url: str) -> Optional[str]:
+    """
+    Lee un archivo RSS local desde una URL file://.
+    
+    Args:
+        url: URL con esquema file://
+        
+    Returns:
+        Contenido del archivo o None si falla
+    """
+    try:
+        # Parsear la URL y obtener la ruta del archivo
+        parsed = urlparse(url)
+        # Decodificar la ruta (convierte %20 a espacios, etc.)
+        file_path = unquote(parsed.path)
+        
+        # En Windows, file:///c:/path tiene un / inicial que debemos quitar
+        if file_path.startswith('/') and len(file_path) > 2 and file_path[2] == ':':
+            file_path = file_path[1:]
+        
+        logger.debug(f"Leyendo archivo local: {file_path}")
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        logger.info(f"Archivo local leído exitosamente: {file_path}")
+        return content
+        
+    except FileNotFoundError:
+        logger.error(f"Archivo no encontrado: {file_path}")
+        return None
+    except Exception as e:
+        logger.error(f"Error leyendo archivo local {url}: {e}")
+        return None
+
+
 @retry(
     stop=stop_after_attempt(MAX_RETRIES),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -34,6 +71,7 @@ class DownloadError(Exception):
 def download_feed(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]:
     """
     Descarga un feed RSS de forma síncrona con reintentos.
+    Soporta URLs HTTP/HTTPS y archivos locales con file://.
     
     Args:
         url: URL del feed RSS
@@ -42,6 +80,10 @@ def download_feed(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]:
     Returns:
         Contenido XML del feed o None si falla
     """
+    # Si es un archivo local, leerlo directamente
+    if url.startswith('file://'):
+        return read_local_file(url)
+    
     headers = {
         'User-Agent': DEFAULT_USER_AGENT,
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
@@ -76,6 +118,7 @@ async def download_feed_async(
 ) -> Tuple[str, Optional[str]]:
     """
     Descarga un feed RSS de forma asíncrona.
+    Soporta URLs HTTP/HTTPS y archivos locales con file://.
     
     Args:
         session: Sesión aiohttp
@@ -85,6 +128,11 @@ async def download_feed_async(
     Returns:
         Tupla (url, contenido_xml) donde contenido puede ser None si falla
     """
+    # Si es un archivo local, leerlo directamente (de forma síncrona)
+    if url.startswith('file://'):
+        content = read_local_file(url)
+        return (url, content)
+    
     headers = {
         'User-Agent': DEFAULT_USER_AGENT,
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
@@ -124,6 +172,7 @@ async def download_feeds_async(
 ) -> List[Tuple[str, str, Optional[str]]]:
     """
     Descarga múltiples feeds de forma concurrente.
+    Soporta URLs HTTP/HTTPS y archivos locales con file://.
     
     Args:
         feeds: Lista de diccionarios con 'nombre' y 'url'
@@ -132,10 +181,14 @@ async def download_feeds_async(
     Returns:
         Lista de tuplas (feed_dict, contenido_xml)
     """
-    # Agrupar por dominio para rate limiting
+    # Agrupar por dominio para rate limiting (archivos locales van a un grupo especial)
     domain_feeds: Dict[str, List[Dict[str, str]]] = {}
     for feed in feeds:
-        domain = urlparse(feed['url']).netloc
+        url = feed['url']
+        if url.startswith('file://'):
+            domain = 'local_files'
+        else:
+            domain = urlparse(url).netloc
         if domain not in domain_feeds:
             domain_feeds[domain] = []
         domain_feeds[domain].append(feed)

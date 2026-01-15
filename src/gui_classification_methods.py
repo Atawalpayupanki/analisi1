@@ -44,6 +44,11 @@ def start_classification(self):
     self.is_running = True
     if hasattr(self, 'classify_button'):
         self.classify_button.config(state='disabled')
+    
+    # Enable Stop button
+    if hasattr(self, 'stop_button'):
+        self.stop_button.config(state='normal')
+        
     self.status_label.config(text="● Clasificando...", fg='#8b5cf6')
     
     self.classification_stats = {'total': len(pendientes), 'classified': 0, 'failed': 0, 'temas': {}, 'imagenes': {}}
@@ -126,6 +131,11 @@ def run_classification(self, csv_path):
                 log_classification_failed(datos.get('titulo', 'Sin título'), str(e))
                 # Marcar como error
                 db.actualizar_estado(url, 'error', str(e))
+                
+            # Guardar periódicamente (cada 10 artículos)
+            if i % 10 == 0:
+                db.guardar()
+                logger.info(f"Guardado parcial (progreso: {i}/{total})")
         
         # Guardar todos los cambios
         db.guardar()
@@ -145,6 +155,8 @@ def run_classification(self, csv_path):
         self.is_running = False
         if hasattr(self, 'classify_button'):
             self.root.after(0, lambda: self.classify_button.config(state='normal'))
+        if hasattr(self, 'stop_button'):
+            self.root.after(0, lambda: self.stop_button.config(state='disabled'))
         self.root.after(0, lambda: self.status_label.config(text="● Listo", fg=self.colors['text_light']))
 
 

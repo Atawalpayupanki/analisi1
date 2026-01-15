@@ -60,7 +60,20 @@ def extract_with_fallback_bs4(html: str, url: str) -> ExtractionResult:
                 'div.article-content',
                 'div.texto-noticia',
                 'div.article-body-content'
-            ]
+            ],
+            # Xinhuanet - medios chinos
+            'news.cn': [
+                '#detail',  # Contenedor principal del artículo
+                'div#detail',
+                'div.detail',
+                'span.detailContent',
+            ],
+            'xinhuanet.com': [
+                '#detail',
+                'div#detail',
+                'div.detail',
+                'span.detailContent',
+            ],
         }
         
         # Selectores genéricos de contenedores

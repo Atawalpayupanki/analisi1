@@ -10,22 +10,28 @@
             ]
         },
         {
-            "nombre": "Xinhua (Chinese)",
+            "nombre": "Xinhua 新华网 (RSSHub Local)",
             "urls": [
-                "http://www.xinhuanet.com/politics/news_politics.xml",
-                "http://www.xinhuanet.com/world/news_world.xml",
-                "http://www.xinhuanet.com/mil/news_mil.xml",
-                "http://www.xinhuanet.com/finance/news_finance.xml",
-                "http://www.xinhuanet.com/local/news_province.xml",
-                "http://www.xinhuanet.com/tw/news_tw.xml",
-                "http://www.xinhuanet.com/overseas/news_overseas.xml",
-                "http://www.xinhuanet.com/house/news_house.xml",
-                "http://www.xinhuanet.com/legal/news_legal.xml",
-                "http://www.xinhuanet.com/edu/news_edu.xml",
-                "http://www.xinhuanet.com/sports/news_sports.xml",
-                "http://www.xinhuanet.com/ent/news_ent.xml",
-                "http://www.xinhuanet.com/auto/news_auto.xml",
-                "http://www.xinhuanet.com/collection/news_collection.xml"
+                "http://localhost:1200/xinhua/china",
+                "http://localhost:1200/xinhua/world",
+                "http://localhost:1200/xinhua/finance",
+                "http://localhost:1200/xinhua/tech",
+                "http://localhost:1200/xinhua/sports",
+                "http://localhost:1200/xinhua/ent",
+                "http://localhost:1200/xinhua/mil",
+                "http://localhost:1200/xinhua/gangao",
+                "http://localhost:1200/xinhua/tw",
+                "http://localhost:1200/xinhua/latest"
+            ]
+        },
+        {
+            "nombre": "Xinhua 新华网 (Static Feeds)",
+            "urls": [
+                "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_china.xml",
+                "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_world.xml",
+                "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_tech.xml",
+                "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_sports.xml",
+                "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_ent.xml"
             ]
         },
         {

@@ -100,11 +100,40 @@
             transition: all 0.3s;
         }
 
+        .filter-group select[multiple] {
+            min-height: 120px;
+            padding: 8px;
+        }
+
+        .filter-group select[multiple] option {
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 2px 0;
+            cursor: pointer;
+        }
+
+        .filter-group select[multiple] option:checked {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+
+        .filter-group select[multiple] option:hover {
+            background: rgba(37, 99, 235, 0.1);
+        }
+
         .filter-group select:focus,
         .filter-group input:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .filter-hint {
+            font-size: 0.8em;
+            color: var(--text-light);
+            margin-top: 4px;
+            font-style: italic;
         }
 
         .button-group {
@@ -323,33 +352,33 @@
             <div class="filter-grid">
                 <div class="filter-group">
                     <label for="filterTema">Tema</label>
-                    <select id="filterTema">
-                        <option value="">Todos los temas</option>
+                    <select id="filterTema" multiple>
                     </select>
+                    <div class="filter-hint">Mantén Ctrl/Cmd para seleccionar múltiples</div>
                 </div>
                 <div class="filter-group">
                     <label for="filterImagen">Imagen de China</label>
-                    <select id="filterImagen">
-                        <option value="">Todas las imágenes</option>
+                    <select id="filterImagen" multiple>
                     </select>
+                    <div class="filter-hint">Mantén Ctrl/Cmd para seleccionar múltiples</div>
                 </div>
                 <div class="filter-group">
                     <label for="filterProcedencia">Procedencia</label>
-                    <select id="filterProcedencia">
-                        <option value="">Todas las procedencias</option>
+                    <select id="filterProcedencia" multiple>
                     </select>
+                    <div class="filter-hint">Mantén Ctrl/Cmd para seleccionar múltiples</div>
                 </div>
                 <div class="filter-group">
                     <label for="filterMedio">Medio</label>
-                    <select id="filterMedio">
-                        <option value="">Todos los medios</option>
+                    <select id="filterMedio" multiple>
                     </select>
+                    <div class="filter-hint">Mantén Ctrl/Cmd para seleccionar múltiples</div>
                 </div>
                 <div class="filter-group">
                     <label for="filterEstado">Estado</label>
-                    <select id="filterEstado">
-                        <option value="">Todos los estados</option>
+                    <select id="filterEstado" multiple>
                     </select>
+                    <div class="filter-hint">Mantén Ctrl/Cmd para seleccionar múltiples</div>
                 </div>
                 <div class="filter-group">
                     <label for="searchText">Buscar en titular</label>
@@ -468,14 +497,49 @@
             }
         }
 
-        // Parser CSV robusto (compatible con csv.QUOTE_ALL de Python)
+        // Parser CSV mejorado y robusto
         function parseCSV(text) {
             // Eliminar BOM si existe (utf-8-sig)
             if (text.charCodeAt(0) === 0xFEFF) {
                 text = text.slice(1);
             }
 
-            const lines = text.split(/\r?\n/);
+            // Dividir en líneas preservando el contenido
+            const lines = [];
+            let currentLine = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+
+                if (char === '"') {
+                    currentLine += char;
+                    if (inQuotes && nextChar === '"') {
+                        currentLine += nextChar;
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                    if (currentLine.trim()) {
+                        lines.push(currentLine);
+                    }
+                    currentLine = '';
+                    // Saltar \r\n
+                    if (char === '\r' && nextChar === '\n') {
+                        i++;
+                    }
+                } else {
+                    currentLine += char;
+                }
+            }
+
+            // Añadir última línea si existe
+            if (currentLine.trim()) {
+                lines.push(currentLine);
+            }
+
             if (lines.length < 2) {
                 console.error('CSV vacío o inválido');
                 return [];
@@ -484,35 +548,36 @@
             // Parsear headers
             const headers = parseCSVLine(lines[0]);
             console.log('Headers encontrados:', headers);
+            console.log('Total de columnas:', headers.length);
 
             const data = [];
 
             // Parsear cada línea de datos
             for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue; // Saltar líneas vacías
+                const values = parseCSVLine(lines[i]);
 
-                const values = parseCSVLine(line);
-
-                // Solo procesar si tiene el número correcto de columnas
-                if (values.length >= headers.length) {
+                // Verificar que tenga el número correcto de columnas
+                if (values.length === headers.length) {
                     const obj = {};
                     headers.forEach((header, index) => {
                         obj[header] = values[index] || '';
                     });
                     data.push(obj);
+                } else if (values.length > 0) {
+                    console.warn(`Línea ${i + 1}: esperadas ${headers.length} columnas, encontradas ${values.length}`);
                 }
             }
 
             console.log(`Parseadas ${data.length} filas de datos`);
             if (data.length > 0) {
                 console.log('Primera fila de ejemplo:', data[0]);
+                console.log('Campos disponibles:', Object.keys(data[0]));
             }
 
             return data;
         }
 
-        // Parser de línea CSV (maneja comillas dobles como Python csv.QUOTE_ALL)
+        // Parser de línea CSV mejorado
         function parseCSVLine(line) {
             const result = [];
             let current = '';
@@ -537,7 +602,7 @@
                     }
                 } else if (char === ',' && !inQuotes) {
                     // Fin de campo
-                    result.push(current);
+                    result.push(current.trim());
                     current = '';
                     i++;
                     continue;
@@ -548,7 +613,7 @@
             }
 
             // Añadir último campo
-            result.push(current);
+            result.push(current.trim());
 
             return result;
         }
@@ -570,36 +635,44 @@
 
         function populateSelect(id, options) {
             const select = document.getElementById(id);
-            const currentValue = select.value;
+            const currentValues = Array.from(select.selectedOptions).map(opt => opt.value);
 
-            // Mantener la primera opción "Todos"
-            select.innerHTML = select.options[0].outerHTML;
+            // Limpiar y repoblar
+            select.innerHTML = '';
 
             options.forEach(option => {
                 const opt = document.createElement('option');
                 opt.value = option;
                 opt.textContent = option;
+                // Mantener selecciones previas si existen
+                if (currentValues.includes(option)) {
+                    opt.selected = true;
+                }
                 select.appendChild(opt);
             });
+        }
 
-            select.value = currentValue;
+        // Función auxiliar para obtener valores seleccionados de un select múltiple
+        function getSelectedValues(id) {
+            const select = document.getElementById(id);
+            return Array.from(select.selectedOptions).map(opt => opt.value);
         }
 
         // Aplicar filtros
         function applyFilters() {
-            const tema = document.getElementById('filterTema').value;
-            const imagen = document.getElementById('filterImagen').value;
-            const procedencia = document.getElementById('filterProcedencia').value;
-            const medio = document.getElementById('filterMedio').value;
-            const estado = document.getElementById('filterEstado').value;
+            const temas = getSelectedValues('filterTema');
+            const imagenes = getSelectedValues('filterImagen');
+            const procedencias = getSelectedValues('filterProcedencia');
+            const medios = getSelectedValues('filterMedio');
+            const estados = getSelectedValues('filterEstado');
             const searchText = document.getElementById('searchText').value.toLowerCase();
 
             filteredData = allData.filter(item => {
-                return (!tema || item.tema === tema) &&
-                    (!imagen || item.imagen_de_china === imagen) &&
-                    (!procedencia || item.procedencia === procedencia) &&
-                    (!medio || item.medio === medio) &&
-                    (!estado || item.estado === estado) &&
+                return (temas.length === 0 || temas.includes(item.tema)) &&
+                    (imagenes.length === 0 || imagenes.includes(item.imagen_de_china)) &&
+                    (procedencias.length === 0 || procedencias.includes(item.procedencia)) &&
+                    (medios.length === 0 || medios.includes(item.medio)) &&
+                    (estados.length === 0 || estados.includes(item.estado)) &&
                     (!searchText || item.titular.toLowerCase().includes(searchText));
             });
 
@@ -610,11 +683,11 @@
 
         // Resetear filtros
         function resetFilters() {
-            document.getElementById('filterTema').value = '';
-            document.getElementById('filterImagen').value = '';
-            document.getElementById('filterProcedencia').value = '';
-            document.getElementById('filterMedio').value = '';
-            document.getElementById('filterEstado').value = '';
+            // Deseleccionar todas las opciones en los selects múltiples
+            ['filterTema', 'filterImagen', 'filterProcedencia', 'filterMedio', 'filterEstado'].forEach(id => {
+                const select = document.getElementById(id);
+                Array.from(select.options).forEach(opt => opt.selected = false);
+            });
             document.getElementById('searchText').value = '';
 
             filteredData = [...allData];
@@ -654,6 +727,8 @@
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 10);
 
+            const total = sortedTemas.reduce((sum, t) => sum + t[1], 0);
+
             if (charts.temas) charts.temas.destroy();
 
             const ctx = document.getElementById('temasChart').getContext('2d');
@@ -673,7 +748,16 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed.y;
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${context.label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -693,6 +777,8 @@
                 'Neutral': 'rgba(107, 114, 128, 0.7)',
                 'Amenaza': 'rgba(245, 158, 11, 0.7)'
             };
+
+            const total = Object.values(imagenes).reduce((sum, val) => sum + val, 0);
 
             if (charts.imagen) charts.imagen.destroy();
 
@@ -714,6 +800,15 @@
                     plugins: {
                         legend: {
                             position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed;
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${context.label}: ${value} (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }
@@ -727,6 +822,8 @@
                     procedencias[item.procedencia] = (procedencias[item.procedencia] || 0) + 1;
                 }
             });
+
+            const total = Object.values(procedencias).reduce((sum, val) => sum + val, 0);
 
             if (charts.procedencia) charts.procedencia.destroy();
 
@@ -752,6 +849,15 @@
                     plugins: {
                         legend: {
                             position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed;
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${context.label}: ${value} (${percentage}%)`;
+                                }
+                            }
                         }
                     }
                 }
@@ -770,11 +876,13 @@
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 10);
 
+            const total = sortedMedios.reduce((sum, m) => sum + m[1], 0);
+
             if (charts.medios) charts.medios.destroy();
 
             const ctx = document.getElementById('mediosChart').getContext('2d');
             charts.medios = new Chart(ctx, {
-                type: 'horizontalBar',
+                type: 'bar',
                 data: {
                     labels: sortedMedios.map(m => m[0]),
                     datasets: [{
@@ -790,7 +898,16 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    const value = context.parsed.x;
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${context.label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
                     }
                 }
             });

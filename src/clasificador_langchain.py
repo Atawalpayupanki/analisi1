@@ -49,7 +49,8 @@ CATEGORIAS_IMAGEN = [
     "Neutral",
     "Muy positiva",
     "Muy negativa",
-    "Imperio de Xi Jinping"
+    "Imperio de Xi Jinping",
+    "No se habla de China"
 ]
 
 # Prompt actualizado para clasificación multilingüe
@@ -62,39 +63,41 @@ Si un artículo toca múltiples áreas, elige únicamente la que sea dominante e
 
 Tu salida debe ser exclusivamente un objeto JSON válido. No añadas comentarios, explicaciones ni texto fuera del JSON.
 
-Categorías de "tema":
+Categorías de "tema" con una breve descripción orientativa, orientativa quiere decir que debe clasificarse en la que encaje mejor aunque no cumpla todos los parametros establecidos, entre parentesis de cada categoría, no añadas la descripción en el JSON:
 
-Economia
+Economia (Si la noticia trata temas sobre el crecimiento de china, comercio y datos sobre el estatus economico en china, PIB)
 
-Política interior China
+Política interior China (Si la noticia trata sobre las politicas que establece el gobierno chino para los chinos en china, leyes chinas, cambios en la administracion de zonas)
 
-Geopolítica
+Geopolítica (Si la noticia trata sobre temas geopolíticos que afectan a china, como relaciones con otros paises, conflictos territoriales, control de puntos estrategicos, temas militares)
 
-Política social
+Política social (si la noticia trata sobre temas sociales en china, como derechos humanos, derechos civiles, derechos laborales, medidas tomadas por el gobierno chino que afecten a la sociedad china, como construcción de asilos, proyectos para personas de la tercera edad)
 
-Territorio geografía y medio ambiente
+Territorio geografía y medio ambiente (si la noticia trata sobre temas geográficos en china, como territorio, recursos naturales, medio ambiente)
 
-Cultura y ciencia
+Cultura y ciencia (si la noticia trata sobre temas de interés cultural, como arte, historia o curiosidades sobre china, así como avances y descubrimientos realizados en china)
 
-Tecnología industrial
+Tecnología industrial (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a la industria, al proceso productivo, fabricas, optimizacion de procesos industriales, robots)
 
-Tecnología de consumo
+Tecnología de consumo (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a el consumidor, productos tecnologicos como telefonos, televisores, ropa, calzado, automoviles o productos de consumo, no para la producción industrial)
 
-Categorías de "imagen_de_china":
+Categorías de "imagen_de_china" con una breve descripción orientativa, orientativa quiere decir que debe clasificarse en la que encaje mejor aunque no cumpla todos los parametros establecidos, entre parentesis de cada categoría, no añadas la descripción en el JSON:
 
-Amenaza
+Amenaza (La noticia refleja que china podría ser una amenaza para los intereses de otros paises o para sus ciudadanos, como la competencia de otros paises, fomenta el miedo hacia china, representa a china como un enemigo)
 
-Positiva
+Positiva (La noticia refleja que china es una potencia beneficiosa para los chinos y otros paises, fomenta la confianza hacia china, la admiración y refleja el crecimiento económico de china como algo positivo)
 
-Negativa
+Negativa (La noticia refleja que china es una potencia perjudicial para los chinos, como un pais bajo una dictadura, refleja la opresión de los chinos, la pobreza y la desigualdad, tiene una perspectiva critica hacia las políticas del gobierno chino)
 
-Neutral
+Neutral (En la noticia no hay ninguna valoración sobre china, se habla de un hecho neutral que no afecta a otros paises, se menciona a china com un sitio en el que ocurrió algo, no de lo que pasó despues, ni de la sociedad, ni de el contexto, ejemplo "Se ha encontrado en china un fosil de un dinosaurio" y la noticia habla solo de el dinosaurio y quien lo ha descubierto, nada de sociedad, ni politicas chinas, ni reacciones de chinos, ni sucesos relacionados en china)
 
-Muy positiva
+Muy positiva (La noticia está sesgada a favor de china, habla de un futuro prospero gracias a china, de politicas para el pueblo, y de un gobierno que promueve el bienestar, que resiste y es fuerte, da una una imagen muy positiva del pais como el futuro, avanzado a su epoco y beneficioso)
 
-Muy negativa
+Muy negativa (La noticia está sesgada en contra de china, habla de un gobierno autoritario o un futuro oscuro, de un pais oprimido, de una dictadura o de precariedad economica, de la promoción de desigualdades o de falta de derechos humanos)
 
-Imperio de Xi Jinping
+Imperio de Xi Jinping (La noticia muestra a china como algo totalmente dependiente de Xi-Jinping, como un imperio bajo su autoridad, como un hijo bajo su cuidado, se centra en las acciones exclusivamente de Xi-Jinping y se dice que Xi-Jinping ha hecho algo o ha traido algo a china cuando es algo que el gobierno chino ha hecho o ha pasado en china, aquí van las noticias que estén muy centradas en la imagen de Xi como lider de china)
+
+No se habla de China (La noticia no trata sobre china, no menciona a china en ningún momento y no se refiere a eventos en china, tampoco menciona empresas chinas ni personas chinas, absolutamente nada relacionado con china, o simplemente se menciona al pais)
 
 Contenido a analizar:
 
@@ -142,7 +145,7 @@ def init_groq_model(api_key: str, model_name: str = "llama-3.3-70b-versatile") -
         temperature=0.0,  # Determinístico para clasificación
         max_tokens=500,   # Suficiente para respuesta estructurada
         timeout=30,
-        max_retries=2
+        max_retries=0  # Desactivar reintentos automáticos para manejar 429 manualmente
     )
 
 
@@ -366,6 +369,7 @@ def clasificar_noticia_con_failover(
     Clasifica una noticia con failover automático entre múltiples API keys.
     
     Intenta con GROQ_API_KEY, luego GROQ_API_KEY_BACKUP, GROQ_API_KEY_3, etc.
+    Si detecta error 429 (Too Many Requests), cambia inmediatamente a la siguiente API key.
     
     Args:
         datos: Diccionario con datos de la noticia
@@ -377,6 +381,8 @@ def clasificar_noticia_con_failover(
     Raises:
         Exception: Si todas las API keys fallan
     """
+    import time
+    
     # Lista de claves a intentar en orden de prioridad
     keys_to_try = []
     
@@ -385,7 +391,9 @@ def clasificar_noticia_con_failover(
         "GROQ_API_KEY", 
         "GROQ_API_KEY_BACKUP", 
         "GROQ_API_KEY_3", 
-        "GROQ_API_KEY_4"
+        "GROQ_API_KEY_4",
+        "GROQ_API_KEY_5",
+        "GROQ_API_KEY_6"
     ]
     
     for var_name in env_vars:
@@ -400,15 +408,39 @@ def clasificar_noticia_con_failover(
         )
     
     last_exception = None
+    all_429_errors = True  # Rastrear si todos los errores son 429
     
     for i, (var_name, api_key) in enumerate(keys_to_try):
         try:
             logger.info(f"Intentando clasificación con API key #{i+1} ({var_name})...")
             return clasificar_noticia(datos, api_key=api_key, model_name=model_name)
         except Exception as e:
-            logger.warning(f"Falló API key #{i+1} ({var_name}): {e}")
+            error_msg = str(e)
+            
+            # Detectar error 429 específicamente
+            is_429_error = "429" in error_msg or "Too Many Requests" in error_msg
+            
+            if is_429_error:
+                logger.warning(f"API key #{i+1} ({var_name}) alcanzó el límite de peticiones (429). Probando con la siguiente...")
+            else:
+                all_429_errors = False
+                logger.warning(f"Falló API key #{i+1} ({var_name}): {e}")
+            
             last_exception = e
             
+            # Si es un error 429 y hay más claves disponibles, continuar inmediatamente
+            if is_429_error and i < len(keys_to_try) - 1:
+                continue
+            
+            # Para otros errores, también continuar con la siguiente clave
+            if i < len(keys_to_try) - 1:
+                continue
+    
+    # Si todas las claves fallaron con 429, esperar antes de lanzar excepción
+    if all_429_errors:
+        logger.error(f"Todas las {len(keys_to_try)} API keys alcanzaron el límite de peticiones (429). Esperando 60 segundos...")
+        time.sleep(60)
+    
     raise Exception(f"Todas las API keys ({len(keys_to_try)}) fallaron. Último error: {last_exception}")
 
 

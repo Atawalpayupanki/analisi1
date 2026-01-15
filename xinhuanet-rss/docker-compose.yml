@@ -1,0 +1,37 @@
+version: '3'
+
+services:
+  rsshub:
+    image: diygod/rsshub
+    container_name: rsshub-xinhuanet
+    restart: unless-stopped
+    ports:
+      - "1200:1200"
+    environment:
+      # Cache configuration
+      CACHE_TYPE: memory
+      CACHE_EXPIRE: 300
+      
+      # Request configuration
+      REQUEST_RETRY: 3
+      REQUEST_TIMEOUT: 30000
+      
+      # Logging
+      LOGGER_LEVEL: info
+      
+      # Optional: Uncomment if you need proxy
+      # PROXY_URI: http://proxy-server:port
+      
+    volumes:
+      # Optional: Persistent cache
+      - rsshub-cache:/app/cache
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:1200"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  rsshub-cache:
