@@ -107,10 +107,26 @@ def run_classification(self, csv_path):
                 tema_detectado = resultado.get('tema', '')
                 
                 if tema_detectado == 'Noticia no extraida correctamente':
-                     # Marcar como error de extracción para reintentar luego
-                    db.actualizar_estado(url, 'error', 'Clasificado como error de extracción (contenido insuficiente o inválido)')
-                    logger.warning(f"Artículo marcado como error de extracción: {datos['titulo'][:50]}...")
+                     # Marcar como 'nuevo' para reintentar extracción (limpiando texto)
+                    db.actualizar_articulo(url, {
+                        'texto_completo': '',
+                        'tema': '',
+                        'imagen_de_china': '',
+                        'resumen': '',
+                        'estado': 'nuevo',
+                        'error_msg': 'Reiniciado por mala extracción detectada en clasificación'
+                    })
+                    logger.warning(f"Artículo reiniciado por mala extracción: {datos['titulo'][:50]}...")
                     self.classification_stats['failed'] += 1
+                
+                elif tema_detectado == 'Deportes':
+                    # Eliminar noticia de deportes
+                    db.eliminar_articulo(url)
+                    logger.info(f"Artículo de deportes eliminado: {datos['titulo'][:50]}...")
+                    # No contamos como clasificado ni fallido, simplemente desaparece
+                    # Ajustamos el total para que no parezca que falta uno al final
+                    self.classification_stats['total'] -= 1
+                    
                 else:
                     # Actualizar en la DB como clasificado exitoso
                     db.actualizar_articulo(url, {

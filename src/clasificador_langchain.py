@@ -40,7 +40,9 @@ CATEGORIAS_TEMA = [
     "Cultura y ciencia",
     "Tecnología industrial",
     "Tecnología de consumo",
-    "Noticia no extraida correctamente"
+    "Tecnología de consumo",
+    "Noticia no extraida correctamente",
+    "Deportes"
 ]
 
 CATEGORIAS_IMAGEN = [
@@ -83,6 +85,8 @@ Cultura y ciencia (si la noticia trata sobre temas de interés cultural, como ar
 Tecnología industrial (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a la industria, al proceso productivo, fabricas, optimizacion de procesos industriales, robots)
 
 Tecnología de consumo (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a el consumidor, productos tecnologicos como telefonos, televisores, ropa, calzado, automoviles o productos de consumo, no para la producción industrial)
+
+Deportes (Si la noticia trata sobre deportes, eventos deportivos, resultados de competiciones, atletas, o temas relacionados con el deporte en general)
 
 Noticia no extraida correctamente (Si el texto NO es una noticia, es muy corto, es un aviso de cookies, un error de carga, o texto sin sentido)
 
@@ -398,7 +402,9 @@ def clasificar_noticia_con_failover(
         "GROQ_API_KEY_3", 
         "GROQ_API_KEY_4",
         "GROQ_API_KEY_5",
-        "GROQ_API_KEY_6"
+        "GROQ_API_KEY_6",
+        "GROQ_API_KEY_7",
+        "GROQ_API_KEY_8"
     ]
     
     for var_name in env_vars:

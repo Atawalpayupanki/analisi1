@@ -412,6 +412,14 @@ class RSSChinaGUI:
                                           font=('Segoe UI', 10, 'bold'), relief='flat',
                                           padx=20, pady=10, cursor='hand2')
         self.process_zh_button.pack(fill=tk.X, pady=5)
+        
+        # Botón de generar feed Xinhua
+        self.generate_xinhua_button = tk.Button(actions_card, text="🔄 GENERAR FEED XINHUA",
+                                          command=self.start_generate_xinhua,
+                                          bg='#0d9488', fg='white',
+                                          font=('Segoe UI', 10, 'bold'), relief='flat',
+                                          padx=20, pady=10, cursor='hand2')
+        self.generate_xinhua_button.pack(fill=tk.X, pady=5)
 
         # === ESTADÍSTICAS (Derecha) ===
         stats_card = tk.LabelFrame(right_panel, text="Estadísticas en Vivo", bg=self.colors['card_bg'],
@@ -1124,6 +1132,73 @@ class RSSChinaGUI:
             self.root.after(0, lambda: self.process_zh_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.status_label.config(text="● Listo", 
                                                                 fg=self.colors['text_light']))
+    
+    def start_generate_xinhua(self):
+        """Inicia el proceso de generación del feed de Xinhua."""
+        if self.is_running:
+            messagebox.showwarning("Advertencia", "Ya hay un proceso en ejecución")
+            return
+        
+        self.is_running = True
+        self.generate_xinhua_button.config(state=tk.DISABLED)
+        self.status_label.config(text="● Generando feed Xinhua...", fg='#0d9488')
+        
+        # Ejecutar en thread separado
+        self.worker_thread = threading.Thread(target=self.run_generate_xinhua, daemon=True)
+        self.worker_thread.start()
+
+    def run_generate_xinhua(self):
+        """Ejecuta el script de generación de feed de Xinhua."""
+        try:
+            logger = logging.getLogger(__name__)
+            logger.info("=== Iniciando generación de feed Xinhua ===")
+            log_process_started("Generar Feed Xinhua")
+            
+            # Construir ruta al script
+            script_path = Path(__file__).parent / "generar_feed_xinhua.py"
+            
+            if not script_path.exists():
+                raise FileNotFoundError(f"No se encuentra el script: {script_path}")
+
+            # Ejecutar el script y capturar salida en tiempo real
+            process = subprocess.Popen(
+                [sys.executable, str(script_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                bufsize=1,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+
+            # Leer salida línea por línea
+            while True:
+                line = process.stdout.readline()
+                if not line and process.poll() is not None:
+                    break
+                if line:
+                    logger.info(f"[Xinhua] {line.strip()}")
+
+            # Verificar errores
+            stderr = process.stderr.read()
+            if stderr:
+                logger.error(f"[Xinhua Error] {stderr}")
+
+            if process.returncode == 0:
+                logger.info("=== Generación de feed Xinhua completada ===")
+                self.root.after(0, lambda: messagebox.showinfo("Éxito", "Feed de Xinhua generado correctamente"))
+                log_process_completed("Generar Feed Xinhua", {"status": "success"})
+            else:
+                raise Exception(f"El proceso terminó con código {process.returncode}")
+
+        except Exception as e:
+            logger.error(f"Error generando feed Xinhua: {e}", exc_info=True)
+            log_error("Error Generar Feed Xinhua", str(e))
+            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        finally:
+            self.is_running = False
+            self.root.after(0, lambda: self.generate_xinhua_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.status_label.config(text="● Listo", fg=self.colors['text_light']))
     
     def start_extraction(self):
         """Inicia la extracción de texto completo desde el CSV maestro."""

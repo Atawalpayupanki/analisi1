@@ -239,6 +239,29 @@ class NoticiasDB:
             True si se actualizó
         """
         return self.actualizar_estado(url, 'error', mensaje)
+
+    def eliminar_articulo(self, url: str) -> bool:
+        """
+        Elimina un artículo de la base de datos.
+        
+        Args:
+            url: URL del artículo a eliminar
+            
+        Returns:
+            True si se eliminó, False si no existía
+        """
+        if not self.existe_url(url):
+            return False
+            
+        initial_len = len(self.datos)
+        self.datos = [row for row in self.datos if row.get('url') != url]
+        
+        if len(self.datos) < initial_len:
+            self.urls_index.remove(url)
+            self._dirty = True
+            logger.info(f"Artículo eliminado: {url}")
+            return True
+        return False
     
     def obtener_por_estado(self, estado: str) -> List[Dict[str, Any]]:
         """
