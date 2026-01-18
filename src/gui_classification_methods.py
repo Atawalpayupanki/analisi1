@@ -104,21 +104,28 @@ def run_classification(self, csv_path):
                 
                 resultado = clasificar_noticia_con_failover(datos)
                 
-                # Actualizar en la DB
-                db.actualizar_articulo(url, {
-                    'tema': resultado.get('tema', ''),
-                    'imagen_de_china': resultado.get('imagen_de_china', ''),
-                    'resumen': resultado.get('resumen_dos_frases', ''),
-                    'estado': 'clasificado'
-                })
+                tema_detectado = resultado.get('tema', '')
                 
-                classified_count += 1
-                self.classification_stats['classified'] += 1
-                
-                tema = resultado.get('tema', 'Desconocido')
-                imagen = resultado.get('imagen_de_china', 'Desconocido')
-                self.classification_stats['temas'][tema] = self.classification_stats['temas'].get(tema, 0) + 1
-                self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
+                if tema_detectado == 'Noticia no extraida correctamente':
+                     # Marcar como error de extracción para reintentar luego
+                    db.actualizar_estado(url, 'error', 'Clasificado como error de extracción (contenido insuficiente o inválido)')
+                    logger.warning(f"Artículo marcado como error de extracción: {datos['titulo'][:50]}...")
+                    self.classification_stats['failed'] += 1
+                else:
+                    # Actualizar en la DB como clasificado exitoso
+                    db.actualizar_articulo(url, {
+                        'tema': tema_detectado,
+                        'imagen_de_china': resultado.get('imagen_de_china', ''),
+                        'resumen': resultado.get('resumen_dos_frases', ''),
+                        'estado': 'clasificado'
+                    })
+                    
+                    classified_count += 1
+                    self.classification_stats['classified'] += 1
+                    
+                    self.classification_stats['temas'][tema_detectado] = self.classification_stats['temas'].get(tema_detectado, 0) + 1
+                    imagen = resultado.get('imagen_de_china', 'Desconocido')
+                    self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
                 
                 self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
                 

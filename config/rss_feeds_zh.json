@@ -12,16 +12,17 @@
         {
             "nombre": "Xinhua 新华网 (RSSHub Local)",
             "urls": [
-                "http://localhost:1200/xinhua/china",
-                "http://localhost:1200/xinhua/world",
-                "http://localhost:1200/xinhua/finance",
-                "http://localhost:1200/xinhua/tech",
-                "http://localhost:1200/xinhua/sports",
-                "http://localhost:1200/xinhua/ent",
-                "http://localhost:1200/xinhua/mil",
-                "http://localhost:1200/xinhua/gangao",
-                "http://localhost:1200/xinhua/tw",
-                "http://localhost:1200/xinhua/latest"
+                "http://localhost:8000/xinhua/china",
+                "http://localhost:8000/xinhua/world",
+                "http://localhost:8000/xinhua/finance",
+                "http://localhost:8000/xinhua/tech",
+                "http://localhost:8000/xinhua/ent",
+                "http://localhost:8000/xinhua/mil",
+                "http://localhost:8000/xinhua/gangao",
+                "http://localhost:8000/xinhua/tw",
+                "http://localhost:8000/xinhua/latest",
+                "http://localhost:8000/feeds/xinhua_world.xml",
+                "http://localhost:8000/xinhua_china.xml"
             ]
         },
         {
@@ -30,7 +31,6 @@
                 "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_china.xml",
                 "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_world.xml",
                 "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_tech.xml",
-                "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_sports.xml",
                 "file:///c:/Users/pauta/Desktop/pau/bachiller/phipatia/analitzador/xinhuanet-rss/feeds/xinhua_ent.xml"
             ]
         },

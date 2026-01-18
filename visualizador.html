@@ -337,6 +337,84 @@
                 font-size: 1.8em;
             }
         }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 900px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s;
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #ddd;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 70vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            font-size: 1.1em;
+        }
+
+        @keyframes slideIn {
+            from {
+                bottom: -300px;
+                opacity: 0
+            }
+
+            to {
+                bottom: 0;
+                opacity: 1
+            }
+        }
     </style>
 </head>
 
@@ -450,6 +528,7 @@
                         <th>Fecha</th>
                         <th>Medio</th>
                         <th>Titular</th>
+                        <th>Lectura</th>
                         <th>Tema</th>
                         <th>Imagen</th>
                         <th>Procedencia</th>
@@ -461,6 +540,19 @@
                     </tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Modal para texto completo -->
+    <div id="fullTextModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Título de la noticia</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalText">
+                Contenido del texto...
+            </div>
         </div>
     </div>
 
@@ -919,7 +1011,7 @@
             document.getElementById('filteredCount').textContent = filteredData.length;
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="no-data">No hay datos que coincidan con los filtros</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="no-data">No hay datos que coincidan con los filtros</td></tr>';
                 return;
             }
 
@@ -932,6 +1024,12 @@
                         <td>${item.fecha ? new Date(item.fecha).toLocaleDateString('es-ES') : '-'}</td>
                         <td><strong>${item.medio || '-'}</strong></td>
                         <td>${item.titular || '-'}</td>
+                        <td>
+                            <button class="btn-primary" style="padding: 5px 15px; font-size: 0.9em;" 
+                                onclick="openModal(\`${(item.titular || '').replace(/`/g, '\\`').replace(/"/g, '&quot;')}\`, \`${(item.texto_completo || item.descripcion || 'Sin contenido').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
+                                📖 Ver
+                            </button>
+                        </td>
                         <td>${item.tema || '-'}</td>
                         <td><span class="${imagenClass}">${item.imagen_de_china || '-'}</span></td>
                         <td>${item.procedencia || '-'}</td>
@@ -940,7 +1038,7 @@
             }).join('');
 
             if (filteredData.length > 100) {
-                tbody.innerHTML += `<tr><td colspan="6" class="no-data">Mostrando 100 de ${filteredData.length} resultados</td></tr>`;
+                tbody.innerHTML += `<tr><td colspan="7" class="no-data">Mostrando 100 de ${filteredData.length} resultados</td></tr>`;
             }
         }
 
@@ -964,6 +1062,25 @@
             link.href = URL.createObjectURL(blob);
             link.download = `noticias_filtradas_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
+        }
+
+        // Modal functions
+        const modal = document.getElementById("fullTextModal");
+
+        function openModal(title, text) {
+            document.getElementById("modalTitle").textContent = title;
+            document.getElementById("modalText").textContent = text;
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = function (event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
         }
 
         // Inicializar

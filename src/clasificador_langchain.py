@@ -39,7 +39,8 @@ CATEGORIAS_TEMA = [
     "Territorio geografía y medio ambiente",
     "Cultura y ciencia",
     "Tecnología industrial",
-    "Tecnología de consumo"
+    "Tecnología de consumo",
+    "Noticia no extraida correctamente"
 ]
 
 CATEGORIAS_IMAGEN = [
@@ -56,6 +57,8 @@ CATEGORIAS_IMAGEN = [
 # Prompt actualizado para clasificación multilingüe
 PROMPT_TEMPLATE = """Instrucciones:
 Clasifica la siguiente noticia únicamente a partir del contenido proporcionado. No inventes información ni interpretes más allá de lo explícito. Evalúa la imagen de China tal como es presentada por el medio, teniendo en cuenta su procedencia y contexto editorial.
+
+Si el texto es muy corto (menos de 300 caracteres), parece un mensaje de error, aviso de cookies, o no tiene sentido como noticia, clasifícalo con el tema 'Noticia no extraida correctamente' y una imagen 'Neutral'.
 
 Si el texto original no está en español, genera el resumen final en español igualmente, sin traducir literalmente, sino resumiendo el contenido en dos frases claras y concisas.
 
@@ -80,6 +83,8 @@ Cultura y ciencia (si la noticia trata sobre temas de interés cultural, como ar
 Tecnología industrial (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a la industria, al proceso productivo, fabricas, optimizacion de procesos industriales, robots)
 
 Tecnología de consumo (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a el consumidor, productos tecnologicos como telefonos, televisores, ropa, calzado, automoviles o productos de consumo, no para la producción industrial)
+
+Noticia no extraida correctamente (Si el texto NO es una noticia, es muy corto, es un aviso de cookies, un error de carga, o texto sin sentido)
 
 Categorías de "imagen_de_china" con una breve descripción orientativa, orientativa quiere decir que debe clasificarse en la que encaje mejor aunque no cumpla todos los parametros establecidos, entre parentesis de cada categoría, no añadas la descripción en el JSON:
 

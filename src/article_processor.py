@@ -254,8 +254,8 @@ def process_articles(
     csv_path = f"{output_dir}/noticias_china.csv"
     db = obtener_db(csv_path)
     
-    # Obtener artículos con estado='nuevo'
-    articles_data = db.obtener_por_estado('nuevo')
+    # Obtener artículos con estado='nuevo' y 'error' (para reintentar)
+    articles_data = db.obtener_por_estado('nuevo') + db.obtener_por_estado('error')
     
     if not articles_data:
         logger.info("No hay artículos nuevos para procesar")
