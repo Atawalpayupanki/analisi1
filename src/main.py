@@ -20,41 +20,8 @@ from deduplicador import deduplicate
 from almacenamiento import save_results
 
 
-def setup_logging(log_level: str, log_dir: str) -> None:
-    """
-    Configura logging a consola y archivo.
-    
-    Args:
-        log_level: Nivel de logging (DEBUG, INFO, WARNING, ERROR)
-        log_dir: Directorio para archivos de log
-    """
-    # Crear directorio de logs
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    
-    # Configurar formato
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    date_format = '%Y-%m-%d %H:%M:%S'
-    
-    # Nivel de logging
-    level = getattr(logging, log_level.upper(), logging.INFO)
-    
-    # Configurar root logger
-    logging.basicConfig(
-        level=level,
-        format=log_format,
-        datefmt=date_format,
-        handlers=[
-            # Consola
-            logging.StreamHandler(sys.stdout),
-            # Archivo
-            logging.FileHandler(
-                f"{log_dir}/rss_china.log",
-                encoding='utf-8',
-                mode='a'
-            )
-        ]
-    )
-
+from logging_setup import setup_logging
+from config_manager import config
 
 def parse_args():
     """Parsea argumentos de línea de comandos."""
@@ -298,8 +265,12 @@ def main_sync(args) -> None:
 if __name__ == '__main__':
     args = parse_args()
     
+    # Cargar configuración
+    config.load_all()
+    
     # Configurar logging
-    setup_logging(args.log_level, args.log_dir)
+    log_file = f"{args.log_dir}/rss_china.log"
+    setup_logging(log_file=log_file, level=args.log_level)
     
     # Ejecutar
     try:

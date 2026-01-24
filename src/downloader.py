@@ -166,12 +166,36 @@ async def download_feed_async(
     return (url, None)
 
 
+async def process_domain_feeds(
+    session: aiohttp.ClientSession,
+    domain_feeds: List[Dict[str, str]],
+    timeout: int
+) -> List[Tuple[Dict[str, str], Optional[str]]]:
+    """
+    Procesa los feeds de un dominio específico respetando el rate limit.
+    """
+    results = []
+    for feed in domain_feeds:
+        url = feed['url']
+        # Usar download_feed_async que ya tenemos
+        # Nota: download_feed_async devuelve (url, content)
+        # Nosotros queremos devolver (feed_dict, content)
+        _, content = await download_feed_async(session, url, timeout)
+        results.append((feed, content))
+        
+        # Pausa entre peticiones al mismo dominio
+        if len(domain_feeds) > 1:
+            await asyncio.sleep(RATE_LIMIT_DELAY)
+            
+    return results
+
+
 async def download_feeds_async(
     feeds: List[Dict[str, str]],
     timeout: int = DEFAULT_TIMEOUT
-) -> List[Tuple[str, str, Optional[str]]]:
+) -> List[Tuple[Dict[str, str], Optional[str]]]:
     """
-    Descarga múltiples feeds de forma concurrente.
+    Descarga múltiples feeds de forma concurrente, paralelizando por dominio.
     Soporta URLs HTTP/HTTPS y archivos locales con file://.
     
     Args:
@@ -181,34 +205,48 @@ async def download_feeds_async(
     Returns:
         Lista de tuplas (feed_dict, contenido_xml)
     """
-    # Agrupar por dominio para rate limiting (archivos locales van a un grupo especial)
-    domain_feeds: Dict[str, List[Dict[str, str]]] = {}
+    # 1. Agrupar por dominio
+    domain_feeds_map: Dict[str, List[Dict[str, str]]] = {}
     for feed in feeds:
         url = feed['url']
         if url.startswith('file://'):
             domain = 'local_files'
         else:
-            domain = urlparse(url).netloc
-        if domain not in domain_feeds:
-            domain_feeds[domain] = []
-        domain_feeds[domain].append(feed)
-    
-    results = []
-    
-    timeout_config = aiohttp.ClientTimeout(total=timeout)
-    async with aiohttp.ClientSession(timeout=timeout_config) as session:
-        for domain, domain_feed_list in domain_feeds.items():
-            logger.info(f"Descargando {len(domain_feed_list)} feeds de {domain}")
-            
-            for feed in domain_feed_list:
-                url, content = await download_feed_async(session, feed['url'], timeout)
-                results.append((feed, content))
+            try:
+                domain = urlparse(url).netloc
+            except Exception:
+                domain = 'unknown'
                 
-                # Rate limiting: pequeña pausa entre peticiones al mismo dominio
-                if len(domain_feed_list) > 1:
-                    await asyncio.sleep(RATE_LIMIT_DELAY)
+        if domain not in domain_feeds_map:
+            domain_feeds_map[domain] = []
+        domain_feeds_map[domain].append(feed)
     
-    return results
+    # 2. Configurar sesión y límites
+    timeout_config = aiohttp.ClientTimeout(total=timeout)
+    # Limitar conexiones totales simultáneas
+    connector = aiohttp.TCPConnector(limit=20)
+    
+    async with aiohttp.ClientSession(timeout=timeout_config, connector=connector) as session:
+        tasks = []
+        
+        # 3. Crear tareas por dominio (cada dominio procesa sus feeds en serie)
+        for domain, feeds_list in domain_feeds_map.items():
+            if domain == 'local_files':
+                # Archivos locales van aparte, aunque download_feed_async los maneja rápido
+                task = process_domain_feeds(session, feeds_list, timeout)
+            else:
+                task = process_domain_feeds(session, feeds_list, timeout)
+            tasks.append(task)
+            
+        # 4. Ejecutar todas las tareas de dominio en paralelo
+        domain_results = await asyncio.gather(*tasks)
+        
+    # 5. Aplanar resultados
+    all_results = []
+    for dr in domain_results:
+        all_results.extend(dr)
+        
+    return all_results
 
 
 def download_feeds_sync(

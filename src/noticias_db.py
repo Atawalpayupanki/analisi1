@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
+from file_lock import safe_lock
+
 logger = logging.getLogger(__name__)
 
 # Ruta por defecto del CSV maestro
@@ -102,14 +104,16 @@ class NoticiasDB:
             # Crear directorio si no existe
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             
-            with open(self.db_path, 'w', encoding='utf-8-sig', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=COLUMNAS, quoting=csv.QUOTE_ALL)
-                writer.writeheader()
-                
-                for row in self.datos:
-                    # Asegurar que todas las columnas existen
-                    row_completo = {col: row.get(col, '') for col in COLUMNAS}
-                    writer.writerow(row_completo)
+            # Usar lock para escritura segura
+            with safe_lock(self.db_path, timeout=30):
+                with open(self.db_path, 'w', encoding='utf-8-sig', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=COLUMNAS, quoting=csv.QUOTE_ALL)
+                    writer.writeheader()
+                    
+                    for row in self.datos:
+                        # Asegurar que todas las columnas existen
+                        row_completo = {col: row.get(col, '') for col in COLUMNAS}
+                        writer.writerow(row_completo)
             
             self._dirty = False
             logger.info(f"Guardados {len(self.datos)} artículos en {self.db_path}")

@@ -5,7 +5,13 @@ Este script actúa como un puente para ejecutar update_xinhua_feeds.py desde la 
 import sys
 import os
 import subprocess
+import io
 from pathlib import Path
+
+# Configurar salida UTF-8 para Windows
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 def generate_feeds():
     """
@@ -29,7 +35,8 @@ def generate_feeds():
             check=True,
             capture_output=True,
             text=True,
-            encoding='utf-8' # Forzar UTF-8 para capturar correctamente caracteres chinos
+            encoding='utf-8',
+            errors='replace'
         )
         
         # Imprimir la salida para que sea capturada por la GUI

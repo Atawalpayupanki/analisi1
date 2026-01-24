@@ -88,7 +88,7 @@ Tecnología de consumo (si la noticia trata sobre avanzaes o hechos tecnológico
 
 Deportes (Si la noticia trata sobre deportes, eventos deportivos, resultados de competiciones, atletas, o temas relacionados con el deporte en general)
 
-Noticia no extraida correctamente (Si el texto NO es una noticia, es muy corto, es un aviso de cookies, un error de carga, o texto sin sentido)
+Noticia no extraida correctamente (Si el texto NO es una noticia, si el texto no és la noticia completa, es muy corto, es un aviso de cookies, un error de carga, texto sin sentido o solo el subtítulo de la noticia o una parte pequeña)
 
 Categorías de "imagen_de_china" con una breve descripción orientativa, orientativa quiere decir que debe clasificarse en la que encaje mejor aunque no cumpla todos los parametros establecidos, entre parentesis de cada categoría, no añadas la descripción en el JSON:
 
@@ -370,6 +370,34 @@ def clasificar_noticia(
         raise
 
 
+def _parse_wait_time_from_error(error_msg: str) -> Optional[int]:
+    """
+    Extrae el tiempo de espera en segundos del mensaje de error 429.
+    
+    Args:
+        error_msg: Mensaje de error de la API
+        
+    Returns:
+        Tiempo de espera en segundos, o None si no se puede parsear
+    """
+    import re
+    
+    # Patrón: "Please try again in 34m22.368s" o "Please try again in 2m14.783999999s"
+    match = re.search(r'try again in (\d+)m([\d.]+)s', error_msg)
+    if match:
+        minutes = int(match.group(1))
+        seconds = float(match.group(2))
+        total_seconds = minutes * 60 + int(seconds)
+        return total_seconds
+    
+    # Patrón alternativo: "Please try again in 15s"
+    match = re.search(r'try again in ([\d.]+)s', error_msg)
+    if match:
+        return int(float(match.group(1)))
+    
+    return None
+
+
 def clasificar_noticia_con_failover(
     datos: Dict[str, str],
     model_name: str = "llama-3.3-70b-versatile"
@@ -378,7 +406,8 @@ def clasificar_noticia_con_failover(
     Clasifica una noticia con failover automático entre múltiples API keys.
     
     Intenta con GROQ_API_KEY, luego GROQ_API_KEY_BACKUP, GROQ_API_KEY_3, etc.
-    Si detecta error 429 (Too Many Requests), cambia inmediatamente a la siguiente API key.
+    Si detecta error 429 (Too Many Requests), extrae el tiempo de espera,
+    registra el cooldown en APIKeyManager, y salta a la siguiente API key disponible.
     
     Args:
         datos: Diccionario con datos de la noticia
@@ -391,6 +420,11 @@ def clasificar_noticia_con_failover(
         Exception: Si todas las API keys fallan
     """
     import time
+    from datetime import datetime, timedelta
+    from api_key_manager import get_api_key_manager
+    
+    # Obtener instancia del manager
+    manager = get_api_key_manager()
     
     # Lista de claves a intentar en orden de prioridad
     keys_to_try = []
@@ -404,7 +438,9 @@ def clasificar_noticia_con_failover(
         "GROQ_API_KEY_5",
         "GROQ_API_KEY_6",
         "GROQ_API_KEY_7",
-        "GROQ_API_KEY_8"
+        "GROQ_API_KEY_8",
+        "GROQ_API_KEY_9",
+        "GROQ_API_KEY_10"
     ]
     
     for var_name in env_vars:
@@ -420,8 +456,24 @@ def clasificar_noticia_con_failover(
     
     last_exception = None
     all_429_errors = True  # Rastrear si todos los errores son 429
+    wait_times = {}  # Almacenar tiempos de espera por API key
+    skipped_keys = []  # Keys saltadas por estar en cooldown
     
     for i, (var_name, api_key) in enumerate(keys_to_try):
+        # Verificar si la key está en cooldown
+        if not manager.is_available(var_name):
+            wait_time = manager.get_wait_time(var_name)
+            minutes = wait_time // 60
+            seconds = wait_time % 60
+            
+            if minutes > 0:
+                logger.info(f"⏭️  Saltando API key #{i+1} ({var_name}) - en cooldown ({minutes}m {seconds}s restantes)")
+            else:
+                logger.info(f"⏭️  Saltando API key #{i+1} ({var_name}) - en cooldown ({seconds}s restantes)")
+            
+            skipped_keys.append((var_name, wait_time))
+            continue
+        
         try:
             logger.info(f"Intentando clasificación con API key #{i+1} ({var_name})...")
             return clasificar_noticia(datos, api_key=api_key, model_name=model_name)
@@ -432,10 +484,36 @@ def clasificar_noticia_con_failover(
             is_429_error = "429" in error_msg or "Too Many Requests" in error_msg
             
             if is_429_error:
-                logger.warning(f"API key #{i+1} ({var_name}) alcanzó el límite de peticiones (429). Probando con la siguiente...")
+                # Extraer tiempo de espera del mensaje de error
+                wait_seconds = _parse_wait_time_from_error(error_msg)
+                
+                if wait_seconds:
+                    # Registrar cooldown en el manager
+                    manager.set_cooldown(var_name, wait_seconds)
+                    wait_times[var_name] = wait_seconds
+                    minutes = wait_seconds // 60
+                    seconds = wait_seconds % 60
+                    
+                    if minutes > 0:
+                        logger.warning(
+                            f"⏳ API key #{i+1} ({var_name}) alcanzó el límite de peticiones. "
+                            f"Tiempo de espera: {minutes}m {seconds}s. Probando con la siguiente..."
+                        )
+                    else:
+                        logger.warning(
+                            f"⏳ API key #{i+1} ({var_name}) alcanzó el límite de peticiones. "
+                            f"Tiempo de espera: {seconds}s. Probando con la siguiente..."
+                        )
+                else:
+                    # Si no pudimos parsear el tiempo, usar un cooldown por defecto de 60 segundos
+                    manager.set_cooldown(var_name, 60)
+                    logger.warning(
+                        f"⏳ API key #{i+1} ({var_name}) alcanzó el límite de peticiones (429). "
+                        f"Probando con la siguiente..."
+                    )
             else:
                 all_429_errors = False
-                logger.warning(f"Falló API key #{i+1} ({var_name}): {e}")
+                logger.warning(f"❌ Falló API key #{i+1} ({var_name}): {e}")
             
             last_exception = e
             
@@ -447,10 +525,34 @@ def clasificar_noticia_con_failover(
             if i < len(keys_to_try) - 1:
                 continue
     
-    # Si todas las claves fallaron con 429, esperar antes de lanzar excepción
-    if all_429_errors:
-        logger.error(f"Todas las {len(keys_to_try)} API keys alcanzaron el límite de peticiones (429). Esperando 60 segundos...")
-        time.sleep(60)
+    # Si todas las claves fallaron con 429, mostrar resumen de tiempos de espera
+    if all_429_errors and wait_times:
+        # Encontrar la API key con el menor tiempo de espera
+        min_wait_key = min(wait_times.items(), key=lambda x: x[1])
+        min_wait_seconds = min_wait_key[1]
+        min_minutes = min_wait_seconds // 60
+        min_seconds = min_wait_seconds % 60
+        
+        logger.error("=" * 60)
+        logger.error("🚫 TODAS LAS API KEYS AGOTADAS - Tiempos de espera:")
+        logger.error("=" * 60)
+        
+        for var_name, wait_sec in sorted(wait_times.items(), key=lambda x: x[1]):
+            m = wait_sec // 60
+            s = wait_sec % 60
+            if m > 0:
+                logger.error(f"  • {var_name}: {m}m {s}s")
+            else:
+                logger.error(f"  • {var_name}: {s}s")
+        
+        logger.error("=" * 60)
+        if min_minutes > 0:
+            logger.error(f"⏰ Menor tiempo de espera: {min_minutes}m {min_seconds}s ({min_wait_key[0]})")
+        else:
+            logger.error(f"⏰ Menor tiempo de espera: {min_seconds}s ({min_wait_key[0]})")
+        logger.error("=" * 60)
+    elif all_429_errors:
+        logger.error(f"🚫 Todas las {len(keys_to_try)} API keys alcanzaron el límite de peticiones (429).")
     
     raise Exception(f"Todas las API keys ({len(keys_to_try)}) fallaron. Último error: {last_exception}")
 

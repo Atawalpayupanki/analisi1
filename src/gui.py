@@ -86,7 +86,7 @@ class RSSChinaGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("🇨🇳 RSS China News Filter v2.0")
-        self.root.geometry("1280x850")
+        self.root.geometry("1200x760")
         
         # Colores modernos
         self.colors = {
@@ -184,6 +184,9 @@ class RSSChinaGUI:
         self.setup_ui()
         self.setup_logging()
         self.check_log_queue()
+        
+        # Cargar estadísticas iniciales
+        self.root.after(1000, self.update_db_stats)
 
     
     def setup_styles(self):
@@ -357,75 +360,83 @@ class RSSChinaGUI:
                                     padx=15, pady=15, relief='flat')
         actions_card.pack(fill=tk.X)
         
+        # Configurar columnas para que tengan el mismo ancho
+        actions_card.columnconfigure(0, weight=1)
+        actions_card.columnconfigure(1, weight=1)
+        
         self.start_button = tk.Button(actions_card, text="▶ INICIAR PROCESO", 
                                       command=self.start_process,
                                       bg=self.colors['success'], fg='white',
                                       font=('Segoe UI', 10, 'bold'), relief='flat',
-                                      padx=20, pady=10, cursor='hand2')
-        self.start_button.pack(fill=tk.X, pady=5)
+                                      padx=10, pady=10, cursor='hand2')
+        self.start_button.grid(row=0, column=0, padx=5, pady=5, sticky='ew')
         
         self.stop_button = tk.Button(actions_card, text="⬛ DETENER",
                                      command=self.stop_process,
                                      bg=self.colors['error'], fg='white',
                                      font=('Segoe UI', 10, 'bold'), relief='flat',
-                                     padx=20, pady=10, cursor='hand2', state=tk.DISABLED)
-        self.stop_button.pack(fill=tk.X, pady=5)
+                                     padx=10, pady=10, cursor='hand2', state=tk.DISABLED)
+        self.stop_button.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
         
-        ttk.Separator(actions_card, orient='horizontal').pack(fill='x', pady=10)
+        ttk.Separator(actions_card, orient='horizontal').grid(row=1, column=0, columnspan=2, sticky='ew', pady=10)
         
-        self.extract_button = tk.Button(actions_card, text="📝 EXTRAER TEXTO COMPLETO",
+        self.extract_button = tk.Button(actions_card, text="📝 EXTRAER TEXTO",
                                       command=self.start_extraction,
                                       bg=self.colors['secondary'], fg='white',
                                       font=('Segoe UI', 10, 'bold'), relief='flat',
-                                      padx=20, pady=10, cursor='hand2')
-        self.extract_button.pack(fill=tk.X, pady=5)
+                                      padx=10, pady=10, cursor='hand2')
+        self.extract_button.grid(row=2, column=0, padx=5, pady=5, sticky='ew')
         
         # Botón de clasificación
         if CLASIFICADOR_DISPONIBLE:
-            self.classify_button = tk.Button(actions_card, text="🏷️ CLASIFICAR NOTICIAS",
+            self.classify_button = tk.Button(actions_card, text="🏷️ CLASIFICAR",
                                           command=self.start_classification,
                                           bg='#8b5cf6', fg='white',
                                           font=('Segoe UI', 10, 'bold'), relief='flat',
-                                          padx=20, pady=10, cursor='hand2')
-            self.classify_button.pack(fill=tk.X, pady=5)
+                                          padx=10, pady=10, cursor='hand2')
+            self.classify_button.grid(row=2, column=1, padx=5, pady=5, sticky='ew')
         else:
-            tk.Label(actions_card, text="⚠️ Clasificador no disponible\n(instala dependencias LangChain)",
+            tk.Label(actions_card, text="⚠️ Clasificador no disponible",
                     bg=self.colors['card_bg'], fg=self.colors['warning'],
-                    font=('Segoe UI', 8)).pack(fill=tk.X, pady=5)
+                    font=('Segoe UI', 8)).grid(row=2, column=1, padx=5, pady=5, sticky='ew')
         
-        ttk.Separator(actions_card, orient='horizontal').pack(fill='x', pady=10)
+        ttk.Separator(actions_card, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Botón de visualizador de datos
         self.visualizer_button = tk.Button(actions_card, text="📊 VISUALIZADOR DE DATOS",
                                           command=self.open_visualizer,
                                           bg='#ec4899', fg='white',
                                           font=('Segoe UI', 10, 'bold'), relief='flat',
-                                          padx=20, pady=10, cursor='hand2')
-        self.visualizer_button.pack(fill=tk.X, pady=5)
+                                          padx=10, pady=10, cursor='hand2')
+        self.visualizer_button.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky='ew')
         
-        ttk.Separator(actions_card, orient='horizontal').pack(fill='x', pady=10)
+        ttk.Separator(actions_card, orient='horizontal').grid(row=5, column=0, columnspan=2, sticky='ew', pady=10)
         
-        # Botón de procesar medios chinos
-        self.process_zh_button = tk.Button(actions_card, text="🇨🇳 PROCESAR MEDIOS CHINOS",
+        # Botones extra (abajo)
+        self.process_zh_button = tk.Button(actions_card, text="🇨🇳 PROCESAR CH",
                                           command=self.start_process_zh,
                                           bg='#dc2626', fg='white',
                                           font=('Segoe UI', 10, 'bold'), relief='flat',
-                                          padx=20, pady=10, cursor='hand2')
-        self.process_zh_button.pack(fill=tk.X, pady=5)
+                                          padx=10, pady=10, cursor='hand2')
+        self.process_zh_button.grid(row=6, column=0, padx=5, pady=5, sticky='ew')
         
-        # Botón de generar feed Xinhua
-        self.generate_xinhua_button = tk.Button(actions_card, text="🔄 GENERAR FEED XINHUA",
+        self.generate_xinhua_button = tk.Button(actions_card, text="🔄 GEN. XINHUA",
                                           command=self.start_generate_xinhua,
                                           bg='#0d9488', fg='white',
                                           font=('Segoe UI', 10, 'bold'), relief='flat',
-                                          padx=20, pady=10, cursor='hand2')
-        self.generate_xinhua_button.pack(fill=tk.X, pady=5)
+                                          padx=10, pady=10, cursor='hand2')
+        self.generate_xinhua_button.grid(row=6, column=1, padx=5, pady=5, sticky='ew')
 
         # === ESTADÍSTICAS (Derecha) ===
-        stats_card = tk.LabelFrame(right_panel, text="Estadísticas en Vivo", bg=self.colors['card_bg'],
+        # Contenedor para ambas estadísticas lado a lado
+        stats_container = tk.Frame(right_panel, bg=self.colors['bg'])
+        stats_container.pack(fill=tk.X, pady=(0, 15))
+        
+        # --- Estadísticas en Vivo (Izquierda del contenedor) ---
+        stats_card = tk.LabelFrame(stats_container, text="Estadísticas en Vivo", bg=self.colors['card_bg'],
                                   font=('Segoe UI', 11, 'bold'), fg=self.colors['text'],
                                   padx=15, pady=15, relief='flat')
-        stats_card.pack(fill=tk.X, pady=(0, 15))
+        stats_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
         self.stats_labels = {}
         stats_info = [
@@ -453,7 +464,64 @@ class RSSChinaGUI:
                 lbl.bind('<Button-1>', lambda e: self.show_failed_feeds())
                 lbl.config(cursor='hand2')
 
-        # === LOG PREVIEW (Derecha) ===
+        # --- Base de Datos Global (Derecha del contenedor) ---
+        db_stats_card = tk.LabelFrame(stats_container, text="Base de Datos Global", bg=self.colors['card_bg'],
+                                  font=('Segoe UI', 11, 'bold'), fg=self.colors['text'],
+                                  padx=15, pady=15, relief='flat')
+        db_stats_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        self.db_stats_labels = {}
+        db_stats_info = [
+            ('total', '📚 Total Artículos', self.colors['text']),
+            ('extraido', '📝 Texto Extraído', self.colors['success']),
+            ('nuevo', '🆕 Por Extraer', self.colors['warning']),
+            ('clasificado', '✅ Clasificados', self.colors['success']),
+            ('por_clasificar', '⏳ Por Clasificar', self.colors['warning']),
+            ('error', '❌ Errores', self.colors['error'])
+        ]
+        
+        for i, (key, label, color) in enumerate(db_stats_info):
+            row = i // 2
+            col = (i % 2) * 2
+            
+            tk.Label(db_stats_card, text=label, bg=self.colors['card_bg'], fg=self.colors['text_light'],
+                    font=('Segoe UI', 8)).grid(
+                row=row, column=col, sticky='w', padx=(0, 5), pady=3)
+            
+            val = tk.Label(db_stats_card, text="...", bg=self.colors['card_bg'], fg=color,
+                       font=('Segoe UI', 12, 'bold'))
+            val.grid(row=row, column=col+1, sticky='w', padx=(0, 10), pady=3)
+            self.db_stats_labels[key] = val
+            
+        # Botón refrescar BD stats
+        tk.Button(db_stats_card, text="🔄", command=self.update_db_stats,
+                 bg='white', relief='flat', cursor='hand2').place(relx=1.0, rely=0.0, anchor='ne', x=5, y=-10)
+        
+        # === ESTADO DE API KEYS (Derecha, medio) ===
+        api_keys_card = tk.LabelFrame(right_panel, text="🔑 Estado API Keys", bg=self.colors['card_bg'],
+                                font=('Segoe UI', 11, 'bold'), fg=self.colors['text'],
+                                padx=10, pady=10, relief='flat')
+        api_keys_card.pack(fill=tk.X, pady=(10, 10))
+        
+        # Texto para mostrar el estado de las API keys
+        self.api_keys_text = tk.Text(api_keys_card, height=8, font=('Segoe UI', 9),
+                                     bg='white', relief='flat', state='disabled', wrap=tk.WORD)
+        self.api_keys_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Añadir scrollbar por si acaso hay muchas keys en el futuro
+        api_scroll = ttk.Scrollbar(api_keys_card, orient=tk.VERTICAL, command=self.api_keys_text.yview)
+        api_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.api_keys_text.configure(yscrollcommand=api_scroll.set)
+        
+        # Configurar tags para colorear el texto
+        self.api_keys_text.tag_config('disponible', foreground='#10b981')  # Verde
+        self.api_keys_text.tag_config('cooldown', foreground='#f59e0b')     # Naranja
+        self.api_keys_text.tag_config('no_config', foreground='#9ca3af')   # Gris
+        
+        # Iniciar actualización periódica del estado de API keys
+        self.update_api_keys_status()
+        
+        # === VISTA PREVIA DE LOGS (Derecha, abajo) ===
         log_card = tk.LabelFrame(right_panel, text="Vista Previa de Logs", bg=self.colors['card_bg'],
                                 font=('Segoe UI', 11, 'bold'), fg=self.colors['text'],
                                 padx=10, pady=10, relief='flat')
@@ -462,6 +530,96 @@ class RSSChinaGUI:
         self.log_preview = scrolledtext.ScrolledText(log_card, height=10, font=("Consolas", 9),
                                                     bg='#1e1e1e', fg='#d4d4d4', relief='flat')
         self.log_preview.pack(fill=tk.BOTH, expand=True)
+
+    def update_db_stats(self):
+        """Actualiza las estadísticas de la base de datos."""
+        try:
+            from noticias_db import obtener_db
+            csv_path = Path(self.output_dir.get()) / "noticias_china.csv"
+            
+            if not csv_path.exists():
+                for lbl in self.db_stats_labels.values():
+                    lbl.config(text="0")
+                return
+
+            db = obtener_db(str(csv_path))
+            # Recargar para asegurar datos frescos
+            db.cargar()
+            stats = db.contar_por_estado()
+            total = db.total()
+            
+            # Mapeo
+            display_stats = {
+                'total': total,
+                'extraido': stats.get('extraido', 0),
+                'nuevo': stats.get('nuevo', 0),
+                'clasificado': stats.get('clasificado', 0),
+                'por_clasificar': stats.get('por_clasificar', 0),
+                'error': stats.get('error', 0)
+            }
+            
+            for key, value in display_stats.items():
+                if key in self.db_stats_labels:
+                    self.db_stats_labels[key].config(text=str(value))
+                    
+        except Exception as e:
+            logging.error(f"Error actualizando stats BD: {e}")
+
+    def update_api_keys_status(self):
+        """Actualiza el estado de las API keys en la GUI."""
+        try:
+            from api_key_manager import get_api_key_manager
+            
+            manager = get_api_key_manager()
+            status_list = manager.get_all_keys_status()
+            
+            # Actualizar el widget de texto
+            self.api_keys_text.config(state='normal')
+            self.api_keys_text.delete('1.0', tk.END)
+            
+            for key_name, status, wait_seconds, is_configured in status_list:
+                # Simplificar el nombre (ej: GROQ_API_KEY -> Key #1)
+                key_number = key_name.replace('GROQ_API_KEY', 'Key')
+                key_number = key_number.replace('_BACKUP', ' #2')
+                key_number = key_number.replace('_3', ' #3')
+                key_number = key_number.replace('_4', ' #4')
+                key_number = key_number.replace('_5', ' #5')
+                key_number = key_number.replace('_6', ' #6')
+                key_number = key_number.replace('_7', ' #7')
+                key_number = key_number.replace('_8', ' #8')
+                if key_number == 'Key':
+                    key_number = 'Key #1'
+                
+                # Formatear línea según el estado
+                if not is_configured:
+                    line = f"❌ {key_number:<12} No configurada\n"
+                    tag = 'no_config'
+                elif status == 'cooldown':
+                    minutes = wait_seconds // 60
+                    seconds = wait_seconds % 60
+                    if minutes > 0:
+                        time_str = f"{minutes}m {seconds}s"
+                    else:
+                        time_str = f"{seconds}s"
+                    line = f"⏳ {key_number:<12} Cooldown: {time_str}\n"
+                    tag = 'cooldown'
+                else:  # disponible
+                    line = f"✅ {key_number:<12} Disponible\n"
+                    tag = 'disponible'
+                
+                # Insertar con el color apropiado
+                start_pos = self.api_keys_text.index('end-1c')
+                self.api_keys_text.insert(tk.END, line)
+                end_pos = self.api_keys_text.index('end-1c')
+                self.api_keys_text.tag_add(tag, start_pos, end_pos)
+            
+            self.api_keys_text.config(state='disabled')
+            
+        except Exception as e:
+            logging.debug(f"Error actualizando estado de API keys: {e}")
+        
+        # Programar la siguiente actualización (cada 5 segundos)
+        self.root.after(5000, self.update_api_keys_status)
 
     def setup_logs_tab(self):
         """Configura la pestaña de Logs."""
@@ -1167,6 +1325,7 @@ class RSSChinaGUI:
                 stderr=subprocess.PIPE,
                 text=True,
                 encoding='utf-8',
+                errors='replace',
                 bufsize=1,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
             )

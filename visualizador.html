@@ -415,6 +415,34 @@
                 opacity: 1
             }
         }
+
+        .load-more-container {
+            text-align: center;
+            padding: 20px;
+            margin-top: 10px;
+        }
+
+        .btn-load-more {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-load-more:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-load-more:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 
@@ -540,6 +568,11 @@
                     </tr>
                 </tbody>
             </table>
+            <div id="loadMoreContainer" class="load-more-container" style="display: none;">
+                <button class="btn-load-more" onclick="loadMoreResults()">
+                    📄 Cargar más resultados
+                </button>
+            </div>
         </div>
     </div>
 
@@ -560,6 +593,8 @@
         let allData = [];
         let filteredData = [];
         let charts = {};
+        let displayedResults = 100; // Number of results currently displayed
+        const resultsIncrement = 50; // Number of results to load each time
 
         // Cargar datos del CSV
         async function loadData() {
@@ -768,6 +803,7 @@
                     (!searchText || item.titular.toLowerCase().includes(searchText));
             });
 
+            displayedResults = 100; // Reset pagination when filtering
             updateStats();
             updateCharts();
             updateTable();
@@ -783,6 +819,7 @@
             document.getElementById('searchText').value = '';
 
             filteredData = [...allData];
+            displayedResults = 100; // Reset pagination when resetting filters
             updateStats();
             updateCharts();
             updateTable();
@@ -1008,14 +1045,18 @@
         // Actualizar tabla
         function updateTable() {
             const tbody = document.getElementById('tableBody');
+            const loadMoreContainer = document.getElementById('loadMoreContainer');
             document.getElementById('filteredCount').textContent = filteredData.length;
 
             if (filteredData.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="no-data">No hay datos que coincidan con los filtros</td></tr>';
+                loadMoreContainer.style.display = 'none';
                 return;
             }
 
-            tbody.innerHTML = filteredData.slice(0, 100).map(item => {
+            // Display only the number of results specified by displayedResults
+            const resultsToShow = Math.min(displayedResults, filteredData.length);
+            tbody.innerHTML = filteredData.slice(0, resultsToShow).map(item => {
                 const imagenClass = item.imagen_de_china ?
                     `tag tag-${item.imagen_de_china.toLowerCase()}` : '';
 
@@ -1037,8 +1078,26 @@
                 `;
             }).join('');
 
-            if (filteredData.length > 100) {
-                tbody.innerHTML += `<tr><td colspan="7" class="no-data">Mostrando 100 de ${filteredData.length} resultados</td></tr>`;
+            // Show or hide the "Load More" button
+            if (filteredData.length > resultsToShow) {
+                loadMoreContainer.style.display = 'block';
+                const remaining = filteredData.length - resultsToShow;
+                const loadMoreBtn = loadMoreContainer.querySelector('.btn-load-more');
+                loadMoreBtn.textContent = `📄 Cargar más resultados (${remaining} restantes)`;
+            } else {
+                loadMoreContainer.style.display = 'none';
+            }
+        }
+
+        // Load more results
+        function loadMoreResults() {
+            displayedResults += resultsIncrement;
+            updateTable();
+            // Scroll to the position where new results start
+            const table = document.getElementById('dataTable');
+            const rows = table.querySelectorAll('tbody tr');
+            if (rows.length > resultsIncrement) {
+                rows[rows.length - resultsIncrement].scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 

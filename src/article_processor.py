@@ -126,7 +126,7 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
     download_res = download_article_html(url, timeout=timeout)
     result.download_time = download_res.download_time
     
-    # Si la descarga falla, pero tenemos descripción RSS, usaremos eso como fallback al final
+    # Si la descarga falla, se marcará como error
     download_failed = False
     if download_res.status_code and download_res.status_code >= 400:
         download_failed = True
@@ -161,25 +161,7 @@ def process_single_article(news_item: Dict, config: Optional[dict] = None) -> Ar
                 
             return result
 
-    # 3. Fallback: Usar descripción del RSS si todo lo demás falló
-    rss_description = news_item.get('descripcion', '').strip()
-    if rss_description:
-        logger.info(f"Usando descripción RSS como fallback para {url}")
-        result.texto = rss_description
-        result.extraction_method = "rss_summary_fallback"
-        result.scrape_status = "ok" # Consideramos ok porque tenemos ALGO de contenido
-        
-        if cleaner_config:
-             remove_patterns = cleaner_config.get('remove_patterns')
-             result.texto = clean_article_text(result.texto, remove_patterns=remove_patterns)
-        
-        result.idioma = detect_language(result.texto, None)
-        result.char_count = len(result.texto)
-        result.word_count = len(result.texto.split())
-        
-        return result
-    
-    # Si llegamos aquí, falló todo
+    # Si llegamos aquí, falló todo (sin fallback a descripción RSS)
     if download_failed:
         result.scrape_status = "error_descarga"
         if download_res.is_blocked:

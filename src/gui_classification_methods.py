@@ -142,11 +142,9 @@ def run_classification(self, csv_path):
                     self.classification_stats['temas'][tema_detectado] = self.classification_stats['temas'].get(tema_detectado, 0) + 1
                     imagen = resultado.get('imagen_de_china', 'Desconocido')
                     self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
-                
-                self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
-                
-                logger.info(f"Clasificado {i}/{total}: {datos['titulo'][:50]}... -> {tema}")
-                log_classification_success(datos['titulo'], tema, imagen)
+                    
+                    logger.info(f"Clasificado {i}/{total}: {datos['titulo'][:50]}... -> {tema_detectado}")
+                    log_classification_success(datos['titulo'], tema_detectado, imagen)
                 
             except Exception as e:
                 logger.error(f"Error clasificando artículo {i}: {e}")
