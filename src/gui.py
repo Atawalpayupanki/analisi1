@@ -109,6 +109,8 @@ class RSSChinaGUI:
         # Variables
         self.is_running = False
         self.worker_thread: Optional[threading.Thread] = None
+        self.api_server_thread: Optional[threading.Thread] = None  # Thread para el servidor API
+        self.api_server_running = False  # Flag para controlar el servidor API
         self.log_queue = Queue()
         self.results_data: List[NewsItem] = []
         self.full_articles_data: List[Dict] = []
@@ -1616,6 +1618,10 @@ class RSSChinaGUI:
     def open_visualizer(self):
         """Abre el visualizador de datos en el navegador."""
         try:
+            # Iniciar el servidor API si no está corriendo
+            if not self.api_server_running:
+                self.start_api_server()
+            
             # Verificar que existe el script del servidor
             server_script = Path("abrir_visualizador.py")
             if not server_script.exists():
@@ -1630,8 +1636,9 @@ class RSSChinaGUI:
             
             messagebox.showinfo("Visualizador", 
                 "Se abrirá el visualizador en tu navegador.\n\n"
-                "Se iniciará un servidor local en http://localhost:8000\n\n"
-                "Para detener el servidor, cierra la ventana de terminal que se abrirá.")
+                "Servidor API iniciado en http://localhost:5000\n"
+                "Servidor de visualización en http://localhost:8000\n\n"
+                "Para detener el servidor de visualización, cierra la ventana de terminal que se abrirá.")
             
             # Abrir en una nueva ventana de terminal
             if sys.platform == "win32":
@@ -1647,6 +1654,34 @@ class RSSChinaGUI:
             logging.error(f"Error abriendo visualizador: {e}", exc_info=True)
             messagebox.showerror("Error", 
                 f"No se pudo abrir el visualizador:\n{str(e)}")
+    
+    def start_api_server(self):
+        """Inicia el servidor API en un thread separado."""
+        try:
+            if self.api_server_running:
+                logging.info("El servidor API ya está corriendo")
+                return
+            
+            # Importar el módulo del servidor API
+            from api_server import run_server
+            
+            # Crear y arrancar el thread del servidor
+            self.api_server_thread = threading.Thread(
+                target=run_server,
+                kwargs={'host': '127.0.0.1', 'port': 5000, 'debug': False},
+                daemon=True
+            )
+            self.api_server_thread.start()
+            self.api_server_running = True
+            
+            logging.info("Servidor API iniciado en http://127.0.0.1:5000")
+            
+        except Exception as e:
+            logging.error(f"Error iniciando servidor API: {e}", exc_info=True)
+            messagebox.showwarning("Advertencia", 
+                f"No se pudo iniciar el servidor API.\n"
+                f"Las funciones de edición y eliminación no estarán disponibles.\n\n"
+                f"Error: {str(e)}")
 
 
 def main():

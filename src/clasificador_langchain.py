@@ -28,6 +28,22 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
+# EXCEPCIONES PERSONALIZADAS
+# ============================================================
+
+class AllAPIKeysExhaustedError(Exception):
+    """Excepción lanzada cuando todas las API keys están agotadas."""
+    def __init__(self, wait_time_seconds: int, message: str = ""):
+        self.wait_time_seconds = wait_time_seconds
+        super().__init__(message)
+
+
+class DifficultToClassifyError(Exception):
+    """Excepción lanzada cuando una noticia es difícil de clasificar con todas las API keys."""
+    pass
+
+
+# ============================================================
 # CONFIGURACIÓN Y CONSTANTES
 # ============================================================
 
@@ -42,7 +58,8 @@ CATEGORIAS_TEMA = [
     "Tecnología de consumo",
     "Tecnología de consumo",
     "Noticia no extraida correctamente",
-    "Deportes"
+    "Deportes",
+    "No se habla de China"
 ]
 
 CATEGORIAS_IMAGEN = [
@@ -86,8 +103,6 @@ Tecnología industrial (si la noticia trata sobre avanzaes o hechos tecnológico
 
 Tecnología de consumo (si la noticia trata sobre avanzaes o hechos tecnológicos, desarroyo de nueva tecnologia o innovacion IMPORTANTE: Orientado a el consumidor, productos tecnologicos como telefonos, televisores, ropa, calzado, automoviles o productos de consumo, no para la producción industrial)
 
-Deportes (Si la noticia trata sobre deportes, eventos deportivos, resultados de competiciones, atletas, o temas relacionados con el deporte en general)
-
 Noticia no extraida correctamente (Si el texto NO es una noticia, si el texto no és la noticia completa, es muy corto, es un aviso de cookies, un error de carga, texto sin sentido o solo el subtítulo de la noticia o una parte pequeña)
 
 Categorías de "imagen_de_china" con una breve descripción orientativa, orientativa quiere decir que debe clasificarse en la que encaje mejor aunque no cumpla todos los parametros establecidos, entre parentesis de cada categoría, no añadas la descripción en el JSON:
@@ -98,15 +113,15 @@ Positiva (La noticia refleja que china es una potencia beneficiosa para los chin
 
 Negativa (La noticia refleja que china es una potencia perjudicial para los chinos, como un pais bajo una dictadura, refleja la opresión de los chinos, la pobreza y la desigualdad, tiene una perspectiva critica hacia las políticas del gobierno chino)
 
-Neutral (En la noticia no hay ninguna valoración sobre china, se habla de un hecho neutral que no afecta a otros paises, se menciona a china com un sitio en el que ocurrió algo, no de lo que pasó despues, ni de la sociedad, ni de el contexto, ejemplo "Se ha encontrado en china un fosil de un dinosaurio" y la noticia habla solo de el dinosaurio y quien lo ha descubierto, nada de sociedad, ni politicas chinas, ni reacciones de chinos, ni sucesos relacionados en china)
+Neutral (La noticia simplemente menciona a china como un lugar donde ha ocurrido algo, sin dar ninguna valoración sobre el país o su gobierno)
 
-Muy positiva (La noticia está sesgada a favor de china, habla de un futuro prospero gracias a china, de politicas para el pueblo, y de un gobierno que promueve el bienestar, que resiste y es fuerte, da una una imagen muy positiva del pais como el futuro, avanzado a su epoco y beneficioso)
+Muy positiva (La noticia está sesgada a favor de china, habla de un futuro prospero gracias a china, de politicas para el pueblo, y de un gobierno que promueve el bienestar, que resiste y es fuerte, da una imagen muy positiva del pais como el futuro, avanzado a su epoca y beneficioso)
 
 Muy negativa (La noticia está sesgada en contra de china, habla de un gobierno autoritario o un futuro oscuro, de un pais oprimido, de una dictadura o de precariedad economica, de la promoción de desigualdades o de falta de derechos humanos)
 
 Imperio de Xi Jinping (La noticia muestra a china como algo totalmente dependiente de Xi-Jinping, como un imperio bajo su autoridad, como un hijo bajo su cuidado, se centra en las acciones exclusivamente de Xi-Jinping y se dice que Xi-Jinping ha hecho algo o ha traido algo a china cuando es algo que el gobierno chino ha hecho o ha pasado en china, aquí van las noticias que estén muy centradas en la imagen de Xi como lider de china)
 
-No se habla de China (La noticia no trata sobre china, no menciona a china en ningún momento y no se refiere a eventos en china, tampoco menciona empresas chinas ni personas chinas, absolutamente nada relacionado con china, o simplemente se menciona al pais)
+No se habla de China (La noticia no trata sobre china, no menciona a china en ningún momento y no se refiere a eventos en china, tampoco menciona empresas chinas ni personas chinas o simplemente se menciona al pais en una lista de paises)
 
 Contenido a analizar:
 
@@ -551,10 +566,22 @@ def clasificar_noticia_con_failover(
         else:
             logger.error(f"⏰ Menor tiempo de espera: {min_seconds}s ({min_wait_key[0]})")
         logger.error("=" * 60)
+        
+        # Lanzar excepción personalizada con el tiempo de espera
+        raise AllAPIKeysExhaustedError(
+            wait_time_seconds=min_wait_seconds,
+            message=f"Todas las API keys agotadas. Esperar {min_wait_seconds}s antes de reintentar."
+        )
     elif all_429_errors:
         logger.error(f"🚫 Todas las {len(keys_to_try)} API keys alcanzaron el límite de peticiones (429).")
+        # Si todas fallaron con 429 pero no tenemos wait_times, usar un tiempo por defecto
+        raise AllAPIKeysExhaustedError(
+            wait_time_seconds=60,
+            message="Todas las API keys agotadas. Esperar 60s antes de reintentar."
+        )
     
-    raise Exception(f"Todas las API keys ({len(keys_to_try)}) fallaron. Último error: {last_exception}")
+    # Si no todas fueron 429, podría ser un artículo difícil de clasificar
+    raise DifficultToClassifyError(f"No se pudo clasificar después de intentar con {len(keys_to_try)} API keys. Último error: {last_exception}")
 
 
 # ============================================================

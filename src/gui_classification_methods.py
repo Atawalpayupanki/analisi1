@@ -26,7 +26,7 @@ def start_classification(self):
     
     # Verificar artículos pendientes
     db = obtener_db(str(csv_path))
-    pendientes = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar') + db.obtener_por_estado('error')
+    pendientes = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar') + db.obtener_por_estado('error') + db.obtener_por_estado('pendiente_clasificar')
     
     if not pendientes:
         messagebox.showinfo("Info", "No hay artículos pendientes de clasificar.\n\nEstados actuales:\n" + 
@@ -59,8 +59,9 @@ def start_classification(self):
 def run_classification(self, csv_path):
     """Ejecuta la clasificación en un thread separado."""
     import logging
+    import time
     from tkinter import messagebox
-    from clasificador_langchain import clasificar_noticia_con_failover
+    from clasificador_langchain import clasificar_noticia_con_failover, AllAPIKeysExhaustedError, DifficultToClassifyError
     from noticias_db import obtener_db
     from activity_logger import (
         log_classification_success, log_classification_failed,
@@ -74,13 +75,14 @@ def run_classification(self, csv_path):
         
         # Obtener artículos pendientes del CSV maestro
         db = obtener_db(csv_path)
-        articles = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar') + db.obtener_por_estado('error')
+        articles = db.obtener_por_estado('extraido') + db.obtener_por_estado('por_clasificar') + db.obtener_por_estado('error') + db.obtener_por_estado('pendiente_clasificar')
         
         total = len(articles)
         self.classification_stats['total'] = total
         logger.info(f"Clasificando {total} artículos pendientes...")
         
         classified_count = 0
+        skipped_count = 0  # Contador de artículos pospuestos
         
         for i, article in enumerate(articles, 1):
             if not self.is_running:
@@ -107,17 +109,12 @@ def run_classification(self, csv_path):
                 tema_detectado = resultado.get('tema', '')
                 
                 if tema_detectado == 'Noticia no extraida correctamente':
-                     # Marcar como 'nuevo' para reintentar extracción (limpiando texto)
-                    db.actualizar_articulo(url, {
-                        'texto_completo': '',
-                        'tema': '',
-                        'imagen_de_china': '',
-                        'resumen': '',
-                        'estado': 'nuevo',
-                        'error_msg': 'Reiniciado por mala extracción detectada en clasificación'
-                    })
-                    logger.warning(f"Artículo reiniciado por mala extracción: {datos['titulo'][:50]}...")
-                    self.classification_stats['failed'] += 1
+                    # Eliminar noticia mal extraída
+                    db.eliminar_articulo(url)
+                    logger.info(f"Artículo mal extraído eliminado: {datos['titulo'][:50]}...")
+                    # No contamos como clasificado ni fallido, simplemente desaparece
+                    # Ajustamos el total para que no parezca que falta uno al final
+                    self.classification_stats['total'] -= 1
                 
                 elif tema_detectado == 'Deportes':
                     # Eliminar noticia de deportes
@@ -145,6 +142,69 @@ def run_classification(self, csv_path):
                     
                     logger.info(f"Clasificado {i}/{total}: {datos['titulo'][:50]}... -> {tema_detectado}")
                     log_classification_success(datos['titulo'], tema_detectado, imagen)
+            
+            except AllAPIKeysExhaustedError as e:
+                # Todas las API keys están agotadas - esperar y reintentar
+                wait_seconds = e.wait_time_seconds
+                minutes = wait_seconds // 60
+                seconds = wait_seconds % 60
+                
+                if minutes > 0:
+                    logger.warning(f"⏸️  Todas las API keys agotadas. Esperando {minutes}m {seconds}s antes de continuar...")
+                else:
+                    logger.warning(f"⏸️  Todas las API keys agotadas. Esperando {seconds}s antes de continuar...")
+                
+                # Guardar progreso antes de esperar
+                db.guardar()
+                
+                # Esperar el tiempo indicado
+                time.sleep(wait_seconds)
+                
+                logger.info("✅ Tiempo de espera completado. Reintentando clasificación...")
+                
+                # Reintentar este mismo artículo (decrementar i para que se procese de nuevo)
+                # En realidad, como estamos en un for loop, simplemente reintentamos aquí
+                try:
+                    resultado = clasificar_noticia_con_failover(datos)
+                    tema_detectado = resultado.get('tema', '')
+                    
+                    if tema_detectado == 'Noticia no extraida correctamente':
+                        db.eliminar_articulo(url)
+                        logger.info(f"Artículo mal extraído eliminado: {datos['titulo'][:50]}...")
+                        self.classification_stats['total'] -= 1
+                    elif tema_detectado == 'Deportes':
+                        db.eliminar_articulo(url)
+                        logger.info(f"Artículo de deportes eliminado: {datos['titulo'][:50]}...")
+                        self.classification_stats['total'] -= 1
+                    else:
+                        db.actualizar_articulo(url, {
+                            'tema': tema_detectado,
+                            'imagen_de_china': resultado.get('imagen_de_china', ''),
+                            'resumen': resultado.get('resumen_dos_frases', ''),
+                            'estado': 'clasificado'
+                        })
+                        classified_count += 1
+                        self.classification_stats['classified'] += 1
+                        self.classification_stats['temas'][tema_detectado] = self.classification_stats['temas'].get(tema_detectado, 0) + 1
+                        imagen = resultado.get('imagen_de_china', 'Desconocido')
+                        self.classification_stats['imagenes'][imagen] = self.classification_stats['imagenes'].get(imagen, 0) + 1
+                        logger.info(f"Clasificado {i}/{total}: {datos['titulo'][:50]}... -> {tema_detectado}")
+                        log_classification_success(datos['titulo'], tema_detectado, imagen)
+                except Exception as retry_error:
+                    # Si falla después de esperar, marcar como pendiente para más tarde
+                    logger.error(f"⚠️  Error al reintentar después de espera: {retry_error}")
+                    db.actualizar_estado(url, 'pendiente_clasificar', f"Reintento fallido: {str(retry_error)}")
+                    skipped_count += 1
+                    self.classification_stats['failed'] += 1
+                    log_classification_failed(datos.get('titulo', 'Sin título'), str(retry_error))
+            
+            except DifficultToClassifyError as e:
+                # Artículo difícil de clasificar - posponer para más tarde
+                logger.warning(f"⏭️  Artículo difícil de clasificar, pospuesto para más tarde: {datos['titulo'][:50]}...")
+                db.actualizar_estado(url, 'pendiente_clasificar', str(e))
+                skipped_count += 1
+                # No contamos como fallido, solo pospuesto
+                logger.info(f"Artículo marcado como 'pendiente_clasificar' para reintento posterior")
                 
             except Exception as e:
                 logger.error(f"Error clasificando artículo {i}: {e}")
@@ -164,8 +224,13 @@ def run_classification(self, csv_path):
         log_process_completed("Clasificación LLM", self.classification_stats)
         
         logger.info("=== Clasificación completada ===")
-        self.root.after(0, lambda: messagebox.showinfo("Éxito", 
-            f"Clasificación completada\n{self.classification_stats['classified']} artículos clasificados\n{self.classification_stats['failed']} fallos"))
+        
+        # Mensaje de resumen
+        summary_msg = f"Clasificación completada\n{self.classification_stats['classified']} artículos clasificados\n{self.classification_stats['failed']} fallos"
+        if skipped_count > 0:
+            summary_msg += f"\n{skipped_count} artículos pospuestos para más tarde"
+        
+        self.root.after(0, lambda: messagebox.showinfo("Éxito", summary_msg))
         
     except Exception as e:
         import traceback

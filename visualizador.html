@@ -435,6 +435,115 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
+        /* Action buttons in table */
+        .action-btn {
+            padding: 5px 10px;
+            margin: 0 3px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .btn-edit {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #2563eb;
+            transform: scale(1.05);
+        }
+
+        .btn-delete {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background: #dc2626;
+            transform: scale(1.05);
+        }
+
+        /* Edit modal specific styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            background: #f9fafb;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-cancel {
+            background: #6b7280;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-cancel:hover {
+            background: #4b5563;
+        }
+
+        .btn-save {
+            background: var(--success);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-save:hover {
+            background: #059669;
+        }
+
+        .btn-confirm-delete {
+            background: var(--error);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-confirm-delete:hover {
+            background: #dc2626;
+        }
+
         .btn-load-more:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
@@ -490,11 +599,18 @@
                     <label for="searchText">Buscar en titular</label>
                     <input type="text" id="searchText" placeholder="Buscar...">
                 </div>
+                <div class="filter-group">
+                    <label for="filterLongitud">Longitud Máxima</label>
+                    <input type="number" id="filterLongitud" placeholder="Ej: 50" min="0">
+                    <div class="filter-hint">Muestra noticias con menos de X caracteres</div>
+                </div>
             </div>
             <div class="button-group">
                 <button class="btn-primary" onclick="applyFilters()">🔍 Aplicar Filtros</button>
                 <button class="btn-secondary" onclick="resetFilters()">🔄 Limpiar Filtros</button>
                 <button class="btn-success" onclick="exportFilteredData()">💾 Exportar Datos Filtrados (CSV)</button>
+                <button class="btn-delete" onclick="eliminarTodosFiltrados()"
+                    style="background: #ef4444; color: white;">🗑️ Eliminar Filtrados</button>
             </div>
         </div>
 
@@ -540,12 +656,51 @@
                     <canvas id="procedenciaChart"></canvas>
                 </div>
             </div>
+
+            <div class="charts-grid">
+                <div class="chart-card" style="grid-column: 1 / -1;">
+                    <h3>📏 Distribución por Longitud (Caracteres)</h3>
+                    <div class="chart-container">
+                        <canvas id="longitudChart"></canvas>
+                    </div>
+                </div>
+            </div>
             <div class="chart-card">
                 <h3>📰 Distribución por Medio</h3>
                 <div class="chart-container">
                     <canvas id="mediosChart"></canvas>
                 </div>
             </div>
+        </div>
+
+        <div class="controls" style="margin-bottom: 30px;">
+            <h2>📊 Análisis Chi Cuadrado</h2>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="chiRow">Variable Fila</label>
+                    <select id="chiRow">
+                        <option value="tema">Tema</option>
+                        <option value="imagen_de_china">Imagen de China</option>
+                        <option value="procedencia">Procedencia</option>
+                        <option value="medio">Medio</option>
+                        <option value="estado">Estado</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="chiCol">Variable Columna</label>
+                    <select id="chiCol">
+                        <option value="imagen_de_china">Imagen de China</option>
+                        <option value="tema">Tema</option>
+                        <option value="procedencia">Procedencia</option>
+                        <option value="medio">Medio</option>
+                        <option value="estado">Estado</option>
+                    </select>
+                </div>
+                <div class="filter-group" style="justify-content: flex-end;">
+                    <button class="btn-primary" onclick="generateChiSquareTable()">🎲 Generar Tabla</button>
+                </div>
+            </div>
+            <div id="chiSquareOutput" style="margin-top: 20px; overflow-x: auto;"></div>
         </div>
 
         <div class="data-table-container">
@@ -556,15 +711,17 @@
                         <th>Fecha</th>
                         <th>Medio</th>
                         <th>Titular</th>
+                        <th>Longitud</th>
                         <th>Lectura</th>
                         <th>Tema</th>
                         <th>Imagen</th>
                         <th>Procedencia</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
                     <tr>
-                        <td colspan="6" class="loading">Cargando datos...</td>
+                        <td colspan="8" class="loading">Cargando datos...</td>
                     </tr>
                 </tbody>
             </table>
@@ -589,12 +746,70 @@
         </div>
     </div>
 
+    <!-- Modal para editar noticia -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✏️ Editar Noticia</h2>
+                <span class="close" onclick="closeEditModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editTitular">Titular:</label>
+                    <input type="text" id="editTitular" readonly
+                        style="background: #f3f4f6; padding: 10px; border: 1px solid var(--border); border-radius: 8px; width: 100%;">
+                </div>
+                <div class="form-group">
+                    <label for="editTema">Tema:</label>
+                    <select id="editTema">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editImagen">Imagen de China:</label>
+                    <select id="editImagen">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeEditModal()">Cancelar</button>
+                <button class="btn-save" onclick="guardarEdicion()">💾 Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para confirmar eliminación -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🗑️ Confirmar Eliminación</h2>
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; font-size: 1.1em;">¿Estás seguro de que quieres eliminar esta noticia?
+                </p>
+                <p id="deleteNoticiaInfo"
+                    style="padding: 15px; background: #f3f4f6; border-radius: 8px; margin-bottom: 15px;"></p>
+                <p style="color: var(--error); font-weight: 600;">⚠️ Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeDeleteModal()">Cancelar</button>
+                <button class="btn-confirm-delete" onclick="confirmarEliminacion()">🗑️ Eliminar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allData = [];
         let filteredData = [];
         let charts = {};
         let displayedResults = 100; // Number of results currently displayed
         const resultsIncrement = 50; // Number of results to load each time
+        let categorias = { temas: [], imagenes: [] }; // Categorías válidas
+        let currentEditUrl = null; // URL de la noticia siendo editada
+        let currentDeleteUrl = null; // URL de la noticia a eliminar
+        const API_BASE_URL = 'http://127.0.0.1:5000/api'; // URL del servidor API
 
         // Cargar datos del CSV
         async function loadData() {
@@ -701,6 +916,12 @@
                 console.log('Campos disponibles:', Object.keys(data[0]));
             }
 
+            // Calcular longitud para cada artículo
+            data.forEach(item => {
+                const text = item.texto_completo || item.descripcion || '';
+                item.longitud = text.length;
+            });
+
             return data;
         }
 
@@ -793,8 +1014,15 @@
             const medios = getSelectedValues('filterMedio');
             const estados = getSelectedValues('filterEstado');
             const searchText = document.getElementById('searchText').value.toLowerCase();
+            const maxLen = document.getElementById('filterLongitud').value;
+            const maxLength = maxLen ? parseInt(maxLen) : null;
 
             filteredData = allData.filter(item => {
+                // Filtro de longitud
+                if (maxLength !== null && item.longitud > maxLength) {
+                    return false;
+                }
+
                 return (temas.length === 0 || temas.includes(item.tema)) &&
                     (imagenes.length === 0 || imagenes.includes(item.imagen_de_china)) &&
                     (procedencias.length === 0 || procedencias.includes(item.procedencia)) &&
@@ -816,7 +1044,9 @@
                 const select = document.getElementById(id);
                 Array.from(select.options).forEach(opt => opt.selected = false);
             });
+
             document.getElementById('searchText').value = '';
+            document.getElementById('filterLongitud').value = '';
 
             filteredData = [...allData];
             displayedResults = 100; // Reset pagination when resetting filters
@@ -842,6 +1072,79 @@
             updateImagenChart();
             updateProcedenciaChart();
             updateMediosChart();
+            updateLongitudChart();
+        }
+        intervalo = 30;
+        function updateLongitudChart() {
+            // Definir rangos
+            const ranges = [
+                { min: 0, max: intervalo, label: `< ${intervalo}` },
+                { min: intervalo, max: 2 * intervalo, label: `${intervalo} - ${2 * intervalo}` },
+                { min: 2 * intervalo, max: 3 * intervalo, label: `${2 * intervalo} - ${3 * intervalo}` },
+                { min: 3 * intervalo, max: 4 * intervalo, label: `${3 * intervalo} - ${4 * intervalo}` },
+                { min: 4 * intervalo, max: 5 * intervalo, label: `${4 * intervalo} - ${5 * intervalo}` },
+                { min: 5 * intervalo, max: Infinity, label: `> ${5 * intervalo}` }
+            ];
+
+            // Inicializar contadores
+            const counts = new Array(ranges.length).fill(0);
+
+            // Contar artículos en cada rango
+            filteredData.forEach(item => {
+                const len = item.longitud || 0;
+                const rangeIndex = ranges.findIndex(r => len >= r.min && len < r.max);
+                if (rangeIndex !== -1) {
+                    counts[rangeIndex]++;
+                }
+            });
+
+            if (charts.longitud) charts.longitud.destroy();
+
+            const ctx = document.getElementById('longitudChart').getContext('2d');
+            charts.longitud = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ranges.map(r => r.label),
+                    datasets: [{
+                        label: 'Número de Noticias',
+                        data: counts,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)', // Blue-500
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 2,
+                        borderRadius: 5,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function (context) {
+                                    return `Rango: ${context[0].label} caracteres`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Cantidad de Noticias'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Longitud en Caracteres'
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         function updateTemasChart() {
@@ -1049,7 +1352,7 @@
             document.getElementById('filteredCount').textContent = filteredData.length;
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="no-data">No hay datos que coincidan con los filtros</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="no-data">No hay datos que coincidan con los filtros</td></tr>';
                 loadMoreContainer.style.display = 'none';
                 return;
             }
@@ -1060,11 +1363,22 @@
                 const imagenClass = item.imagen_de_china ?
                     `tag tag-${item.imagen_de_china.toLowerCase()}` : '';
 
+                const escapedUrl = encodeURIComponent(item.url || '');
+                const escapedTitular = (item.titular || '').replace(/'/g, '\\&apos;').replace(/"/g, '&quot;');
+
                 return `
                     <tr>
                         <td>${item.fecha ? new Date(item.fecha).toLocaleDateString('es-ES') : '-'}</td>
                         <td><strong>${item.medio || '-'}</strong></td>
-                        <td>${item.titular || '-'}</td>
+                        <td>
+                            ${item.url ?
+                        `<a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-weight: 500;">
+                                    ${item.titular || '-'} 🔗
+                                </a>` :
+                        (item.titular || '-')
+                    }
+                        </td>
+                        <td><span class="tag tag-neutral">${item.longitud || 0} chars</span></td>
                         <td>
                             <button class="btn-primary" style="padding: 5px 15px; font-size: 0.9em;" 
                                 onclick="openModal(\`${(item.titular || '').replace(/`/g, '\\`').replace(/"/g, '&quot;')}\`, \`${(item.texto_completo || item.descripcion || 'Sin contenido').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)">
@@ -1074,6 +1388,14 @@
                         <td>${item.tema || '-'}</td>
                         <td><span class="${imagenClass}">${item.imagen_de_china || '-'}</span></td>
                         <td>${item.procedencia || '-'}</td>
+                        <td>
+                            <button class="action-btn btn-edit" onclick="editarNoticia('${escapedUrl}', '${escapedTitular}', '${item.tema || ''}', '${item.imagen_de_china || ''}')" title="Editar">
+                                ✏️
+                            </button>
+                            <button class="action-btn btn-delete" onclick="confirmarEliminar('${escapedUrl}', '${escapedTitular}')" title="Eliminar">
+                                🗑️
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -1142,8 +1464,362 @@
             }
         }
 
+        // ============================================================
+        // FUNCIONES DE EDICIÓN Y ELIMINACIÓN
+        // ============================================================
+
+        // Cargar categorías válidas desde el servidor
+        async function cargarCategorias() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/categorias`);
+                const result = await response.json();
+
+                if (result.success) {
+                    categorias = result.data;
+                    console.log('Categorías cargadas:', categorias);
+                } else {
+                    console.error('Error cargando categorías:', result.error);
+                }
+            } catch (error) {
+                console.error('Error conectando con el servidor:', error);
+            }
+        }
+
+        // Abrir modal de edición
+        function editarNoticia(urlEncoded, titular, temaActual, imagenActual) {
+            currentEditUrl = decodeURIComponent(urlEncoded);
+
+            // Mostrar titular
+            document.getElementById('editTitular').value = titular;
+
+            // Poblar select de temas
+            const selectTema = document.getElementById('editTema');
+            selectTema.innerHTML = categorias.temas.map(tema =>
+                `<option value="${tema}" ${tema === temaActual ? 'selected' : ''}>${tema}</option>`
+            ).join('');
+
+            // Poblar select de imágenes
+            const selectImagen = document.getElementById('editImagen');
+            selectImagen.innerHTML = categorias.imagenes.map(imagen =>
+                `<option value="${imagen}" ${imagen === imagenActual ? 'selected' : ''}>${imagen}</option>`
+            ).join('');
+
+            // Mostrar modal
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        // Cerrar modal de edición
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentEditUrl = null;
+        }
+
+        // Guardar edición
+        async function guardarEdicion() {
+            if (!currentEditUrl) return;
+
+            const tema = document.getElementById('editTema').value;
+            const imagen = document.getElementById('editImagen').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/noticia/${encodeURIComponent(currentEditUrl)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tema: tema,
+                        imagen_de_china: imagen
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('✅ Noticia actualizada correctamente');
+                    closeEditModal();
+                    // Recargar datos
+                    await loadData();
+                } else {
+                    alert('❌ Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error guardando edición:', error);
+                alert('❌ Error conectando con el servidor. Asegúrate de que el servidor API esté ejecutándose.');
+            }
+        }
+
+        // Abrir modal de confirmación de eliminación
+        function confirmarEliminar(urlEncoded, titular) {
+            currentDeleteUrl = decodeURIComponent(urlEncoded);
+
+            // Mostrar información de la noticia
+            document.getElementById('deleteNoticiaInfo').innerHTML = `
+                <strong>Titular:</strong><br>
+                ${titular}
+            `;
+
+            // Mostrar modal
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+
+        // Cerrar modal de eliminación
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            currentDeleteUrl = null;
+        }
+
+        // Confirmar eliminación
+        async function confirmarEliminacion() {
+            if (!currentDeleteUrl) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/noticia/${encodeURIComponent(currentDeleteUrl)}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('✅ Noticia eliminada correctamente');
+                    closeDeleteModal();
+                    // Recargar datos
+                    await loadData();
+                } else {
+                    alert('❌ Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error eliminando noticia:', error);
+                alert('❌ Error conectando con el servidor. Asegúrate de que el servidor API esté ejecutándose.');
+            }
+        }
+
+        // Eliminar todos los filtrados
+        async function eliminarTodosFiltrados() {
+            if (filteredData.length === 0) {
+                alert('No hay noticias filtradas para eliminar.');
+                return;
+            }
+
+            const count = filteredData.length;
+            const confirmMsg = `⚠️ ESTÁS A PUNTO DE ELIMINAR ${count} NOTICIAS.\n\n` +
+                `Esta acción eliminará PERMANENTEMENTE todas las noticias que ves actualmente en la tabla.\n\n` +
+                `¿Estás seguro de que deseas continuar?`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            // Doble confirmación para evitar accidentes masivos
+            if (!confirm(`CONFIRMACIÓN FINAL: ¿Realmente quieres borrar ${count} noticias? Esta acción NO se puede deshacer.`)) {
+                return;
+            }
+
+            const urls = filteredData.map(item => item.url).filter(Boolean);
+
+            if (urls.length === 0) {
+                alert('No se encontraron URLs válidas para eliminar.');
+                return;
+            }
+
+            try {
+                // Mostrar indicador de carga
+                const btn = document.querySelector('.button-group .btn-delete');
+                const oldText = btn.innerHTML;
+                btn.innerHTML = '⏳ Eliminando...';
+                btn.disabled = true;
+
+                const response = await fetch(`${API_BASE_URL}/noticias/batch-delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ urls: urls })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ Operación completada: ${result.message}`);
+                    await loadData(); // Recargar todo
+                } else {
+                    alert('❌ Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error en eliminación masiva:', error);
+                alert('❌ Error conectando con el servidor.');
+            } finally {
+                // Restaurar botón
+                const btn = document.querySelector('.button-group .btn-delete');
+                if (btn) {
+                    btn.innerHTML = '🗑️ Eliminar Filtrados';
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        // Cerrar modales al hacer clic fuera
+        window.onclick = function (event) {
+            const fullTextModal = document.getElementById('fullTextModal');
+            const editModal = document.getElementById('editModal');
+            const deleteModal = document.getElementById('deleteModal');
+
+            if (event.target == fullTextModal) {
+                fullTextModal.style.display = 'none';
+            }
+            if (event.target == editModal) {
+                closeEditModal();
+            }
+            if (event.target == deleteModal) {
+                closeDeleteModal();
+            }
+        }
+
         // Inicializar
-        loadData();
+        // Chi-Square Analysis Logic
+        function generateChiSquareTable() {
+            const rowVar = document.getElementById('chiRow').value;
+            const colVar = document.getElementById('chiCol').value;
+            const outputDiv = document.getElementById('chiSquareOutput');
+
+            if (rowVar === colVar) {
+                outputDiv.innerHTML = '<p style="color: var(--error);">❌ Por favor selecciona variables diferentes para filas y columnas.</p>';
+                return;
+            }
+
+            // Get unique values for rows and cols from filtered data (or allData if preferred)
+            // Using filteredData allows analysis on subsets
+            const dataToAnalyze = filteredData;
+
+            const rowValues = [...new Set(dataToAnalyze.map(d => d[rowVar]).filter(Boolean))].sort();
+            const colValues = [...new Set(dataToAnalyze.map(d => d[colVar]).filter(Boolean))].sort();
+
+            if (rowValues.length === 0 || colValues.length === 0) {
+                outputDiv.innerHTML = '<p style="color: var(--warning);">⚠️ No hay datos suficientes para las variables seleccionadas.</p>';
+                return;
+            }
+
+            // Initialize contingency table
+            const observed = {};
+            rowValues.forEach(r => {
+                observed[r] = {};
+                colValues.forEach(c => {
+                    observed[r][c] = 0;
+                });
+            });
+
+            // Fill counts
+            let totalN = 0;
+            dataToAnalyze.forEach(item => {
+                const rVal = item[rowVar];
+                const cVal = item[colVar];
+                if (rVal && cVal) {
+                    observed[rVal][cVal]++;
+                    totalN++;
+                }
+            });
+
+            // Calculate totals
+            const rowTotals = {};
+            const colTotals = {};
+
+            rowValues.forEach(r => {
+                rowTotals[r] = colValues.reduce((sum, c) => sum + observed[r][c], 0);
+            });
+
+            colValues.forEach(c => {
+                colTotals[c] = rowValues.reduce((sum, r) => sum + observed[r][c], 0);
+            });
+
+            // Calculate Chi-Square
+            let chiSquare = 0;
+
+            rowValues.forEach(r => {
+                colValues.forEach(c => {
+                    const O = observed[r][c];
+                    const E = (rowTotals[r] * colTotals[c]) / totalN;
+                    if (E > 0) {
+                        chiSquare += Math.pow(O - E, 2) / E;
+                    }
+                });
+            });
+
+            const df = (rowValues.length - 1) * (colValues.length - 1);
+
+            // Render Table
+            let html = `
+                <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <h3 style="margin-bottom: 15px; color: var(--primary);">
+                        Resultados: ${formatLabel(rowVar)} vs ${formatLabel(colVar)}
+                    </h3>
+                    <p style="margin-bottom: 15px;">
+                        <strong>Chi-Cuadrado (χ²):</strong> ${chiSquare.toFixed(4)} <br>
+                        <strong>Grados de Libertad (df):</strong> ${df} <br>
+                        <strong>N:</strong> ${totalN}
+                    </p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                        <thead>
+                            <tr style="background: var(--primary); color: white;">
+                                <th style="padding: 10px; border: 1px solid var(--border);">Variable</th>
+                                ${colValues.map(c => `<th style="padding: 10px; border: 1px solid var(--border);">${c}</th>`).join('')}
+                                <th style="padding: 10px; border: 1px solid var(--border); background: var(--primary-dark);">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            rowValues.forEach(r => {
+                html += `<tr>
+                    <td style="padding: 8px; border: 1px solid var(--border); font-weight: bold; background: #f8fafc;">${r}</td>`;
+
+                colValues.forEach(c => {
+                    const O = observed[r][c];
+                    const E = (rowTotals[r] * colTotals[c]) / totalN;
+                    // Highlight significant deviations? Maybe later.
+                    html += `<td style="padding: 8px; border: 1px solid var(--border); text-align: center;">
+                        <div style="font-weight: bold;">${O}</div>
+                        <div style="font-size: 0.8em; color: var(--text-light);">Exp: ${E.toFixed(1)}</div>
+                    </td>`;
+                });
+
+                html += `<td style="padding: 8px; border: 1px solid var(--border); font-weight: bold; background: #f1f5f9; text-align: center;">${rowTotals[r]}</td>
+                </tr>`;
+            });
+
+            // Column Totals Row
+            html += `<tr style="background: #f1f5f9; font-weight: bold;">
+                <td style="padding: 8px; border: 1px solid var(--border);">Total</td>`;
+
+            colValues.forEach(c => {
+                html += `<td style="padding: 8px; border: 1px solid var(--border); text-align: center;">${colTotals[c]}</td>`;
+            });
+
+            html += `<td style="padding: 8px; border: 1px solid var(--border); text-align: center;">${totalN}</td>
+            </tr>`;
+
+            html += `</tbody></table></div>`;
+
+            outputDiv.innerHTML = html;
+        }
+
+        function formatLabel(key) {
+            const labels = {
+                'tema': 'Tema',
+                'imagen_de_china': 'Imagen de China',
+                'procedencia': 'Procedencia',
+                'medio': 'Medio',
+                'estado': 'Estado'
+            };
+            return labels[key] || key;
+        }
+
+        // Inicializar aplicación
+        async function init() {
+            await cargarCategorias();
+            await loadData();
+        }
+
+        init();
     </script>
 </body>
 
